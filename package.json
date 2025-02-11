@@ -27,7 +27,7 @@
     "passport-linkedin-oauth2": "^2.0.0",
     "passport-local": "^1.0.0",
     "passport-microsoft": "^2.1.0",
-    "pg": "^8.13.1",
+    "pg": "^8.13.2",
     "sequelize": "^6.37.5"
   }
 }
