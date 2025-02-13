@@ -27,4 +27,11 @@ sequelize
     console.error('Unable to connect to the database:', err);
   });
 
+// Instead of sequelize.sync(), force an alter update for development:
+sequelize.sync({ alter: true }).then(() => {
+  console.log('Database synchronized with alter.');
+}).catch(err => {
+  console.error('Database sync error:', err);
+});
+
 module.exports = sequelize;

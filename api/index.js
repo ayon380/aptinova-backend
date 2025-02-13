@@ -15,7 +15,6 @@ app.use(cors({
 
 app.use(express.json());
 
-// Add session middleware before passport
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
@@ -32,7 +31,9 @@ app.use(passport.session());
 const authRoutes = require('../routes/auth');
 app.use('/auth', authRoutes);
 
-// Initialize database
+const jobRoutes = require('../routes/jobs');
+app.use('/jobs', jobRoutes);
+
 sequelize.sync().then(() => {
   console.log('Database synchronized');
 });

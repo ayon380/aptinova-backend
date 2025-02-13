@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
-const User = sequelize.define('User', {
+const HR = sequelize.define('HR', {
   id: {
     type: DataTypes.UUID,
     defaultValue: DataTypes.UUIDV4,
@@ -16,14 +16,6 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: true
   },
-  provider: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  providerId: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
   name: {
     type: DataTypes.STRING,
     allowNull: true
@@ -31,7 +23,11 @@ const User = sequelize.define('User', {
   profilePicture: {
     type: DataTypes.STRING,
     allowNull: true
+  },
+  department: {
+    type: DataTypes.STRING,
+    allowNull: true
   }
 });
 
-module.exports = User;
+module.exports = HR;
