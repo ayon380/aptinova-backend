@@ -34,6 +34,9 @@ app.use('/auth', authRoutes);
 const jobRoutes = require('../routes/jobs');
 app.use('/jobs', jobRoutes);
 
+const domainRoutes = require('../routes/domains');
+app.use('/domains', domainRoutes);
+
 sequelize.sync().then(() => {
   console.log('Database synchronized');
 });

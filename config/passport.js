@@ -13,78 +13,146 @@ passport.use(new LocalStrategy({
   passwordField: 'password',
   passReqToCallback: true
 }, async (req, email, password, done) => {
-  const { userType } = req.body;
-  let user;
-  if (userType === 'candidate') {
-    user = await Candidate.findOne({ where: { email } });
-  } else if (userType === 'hr') {
-    user = await HR.findOne({ where: { email } });
-  } else if (userType === 'hrManager') {
-    user = await HRManager.findOne({ where: { email } });
-  } else {
-    return done(null, false, { message: 'Invalid user type' });
+  try {
+    const { userType } = req.body;
+    let user;
+    if (userType === 'candidate') {
+      user = await Candidate.findOne({ where: { email } });
+    } else if (userType === 'hr') {
+      user = await HR.findOne({ where: { email } });
+    } else if (userType === 'hrManager') {
+      user = await HRManager.findOne({ where: { email } });
+    } else {
+      return done(null, false, { message: 'Invalid user type' });
+    }
+    if (!user) return done(null, false, { message: 'User not found' });
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) return done(null, false, { message: 'Invalid password' });
+    return done(null, user);
+  } catch (error) {
+    return done(error);
   }
-  if (!user) return done(null, false, { message: 'User not found' });
-  const isValid = await bcrypt.compare(password, user.password);
-  if (!isValid) return done(null, false, { message: 'Invalid password' });
-  return done(null, user);
 }));
 
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: '/auth/google/callback'
-}, async (accessToken, refreshToken, profile, done) => {
+  callbackURL: '/auth/google/callback',
+  authorizationURL: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?prompt=select_account' ,
+  passReqToCallback: true // Important: This allows you to access the request object
+}, async (req, accessToken, refreshToken, profile, done) => {
   try {
-    let user = await User.findOne({ where: { providerId: profile.id, provider: 'google' } });
-    if (!user) {
-      user = await User.create({
-        email: profile.emails[0].value,
-        provider: 'google',
-        providerId: profile.id,
-        name: profile.displayName,
-        profilePicture: profile.photos?.[0]?.value
-      });
-    } else if (!user.profilePicture && profile.photos?.length) {
-      await user.update({ profilePicture: profile.photos[0].value });
+    const state = JSON.parse(Buffer.from(req.query.state, 'base64').toString('ascii'));
+    console.log("Passport.js");
+
+    // console.log(state);
+
+    const userType = state.userType;
+    const action = state.action;
+    // console.log(profile);
+    if (action == 'login') {
+      let user;
+      console.log("Login");
+
+      if (userType === 'hr') {
+        user = await HR.findOne({ where: { email: profile.emails[0].value } });
+      } else if (userType === 'hrManager') {
+        user = await HRManager.findOne({ where: { email: profile.emails[0].value } });
+      } else {
+        user = await Candidate.findOne({ where: { email: profile.emails[0].value } });
+      }
+      if (!user) {
+        return done(null, user, { message: 'User not found', success: false });
+      }
+      return done(null, user, { message: 'Logged in successfully', userType, success: true });
     }
-    return done(null, user);
+    else {
+      let user;
+      if (userType === 'hr') {
+        user = await HR.findOne({ where: { email: profile.emails[0].value } });
+      } else if (userType === 'hrManager') {
+        user = await HRManager.findOne({ where: { email: profile.emails[0].value } });
+      } else {
+        user = await Candidate.findOne({ where: { email: profile.emails[0].value } });
+      }
+      if (user) {
+        return done(null, user, { message: 'User already exists, Use Login Page to log into your account', success: false });
+      }
+      if (!user) {
+        if (userType === 'hr') {
+          user = await HR.create({ email: profile.emails[0].value, name: profile.displayName });
+        } else if (userType === 'hrManager') {
+          user = await HRManager.create({ email: profile.emails[0].value, name: profile.displayName });
+        } else {
+          user = await Candidate.create({ email: profile.emails[0].value, name: profile.displayName });
+        }
+      }
+      return done(null, user, { message: 'Signed up successfully', userType, success: true });
+    }
   } catch (error) {
-    return done(error);
+    return done(error, null, { message: 'Something went wrong, Try again after some time', success: false });
   }
 }));
-
 passport.use(new MicrosoftStrategy({
   clientID: process.env.MICROSOFT_CLIENT_ID,
   clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
   callbackURL: '/auth/microsoft/callback',
-  scope: ['user.read']
+  scope: ['user.read'],
+  passReqToCallback: true // Add this line
 },
-async (accessToken, refreshToken, profile, done) => {
-  try {
-    let user = await User.findOne({ 
-      where: { 
-        providerId: profile.id,
-        provider: 'microsoft'
-      }
-    });
+  async (req, accessToken, refreshToken, profile, done) => {
+    try {
+      const state = JSON.parse(Buffer.from(req.query.state, 'base64').toString('ascii'));
+      console.log("Passport.js");
 
-    if (!user) {
-      user = await User.create({
-        email: profile.emails[0].value,
-        provider: 'microsoft',
-        providerId: profile.id,
-        name: profile.displayName,
-        profilePicture: profile.photos?.[0]?.value
-      });
-    } else if (!user.profilePicture && profile.photos?.length) {
-      await user.update({ profilePicture: profile.photos[0].value });
+      // console.log(state);
+
+      const userType = state.userType;
+      const action = state.action;
+      // console.log(profile);
+      if (action == 'login') {
+        let user;
+        console.log("Login");
+
+        if (userType === 'hr') {
+          user = await HR.findOne({ where: { email: profile.emails[0].value } });
+        } else if (userType === 'hrManager') {
+          user = await HRManager.findOne({ where: { email: profile.emails[0].value } });
+        } else {
+          user = await Candidate.findOne({ where: { email: profile.emails[0].value } });
+        }
+        if (!user) {
+          return done(null, user, { message: 'User not found', success: false });
+        }
+        return done(null, user, { message: 'Logged in successfully', userType, success: true });
+      }
+      else {
+        let user;
+        if (userType === 'hr') {
+          user = await HR.findOne({ where: { email: profile.emails[0].value } });
+        } else if (userType === 'hrManager') {
+          user = await HRManager.findOne({ where: { email: profile.emails[0].value } });
+        } else {
+          user = await Candidate.findOne({ where: { email: profile.emails[0].value } });
+        }
+        if (user) {
+          return done(null, false, { message: 'User already exists, Use Login Page to log into your account', success: false });
+        }
+        if (!user) {
+          if (userType === 'hr') {
+            user = await HR.create({ email: profile.emails[0].value, name: profile.displayName });
+          } else if (userType === 'hrManager') {
+            user = await HRManager.create({ email: profile.emails[0].value, name: profile.displayName });
+          } else {
+            user = await Candidate.create({ email: profile.emails[0].value, name: profile.displayName });
+          }
+        }
+        return done(null, user, { message: 'Signed up successfully', success: true });
+      }
+    } catch (error) {
+      return done(error, false, { message: 'Something went wrong, Try again after some time', success: false });
     }
-    return done(null, user);
-  } catch (error) {
-    return done(error);
   }
-}
 ));
 
 passport.use(new LinkedInStrategy({
@@ -92,33 +160,62 @@ passport.use(new LinkedInStrategy({
   clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
   callbackURL: '/auth/linkedin/callback',
   scope: ['r_emailaddress', 'r_liteprofile'],
-  state: true
+  state: true,
+  passReqToCallback: true // Add this line
 },
-async (accessToken, refreshToken, profile, done) => {
-  try {
-    let user = await User.findOne({
-      where: {
-        providerId: profile.id,
-        provider: 'linkedin'
-      }
-    });
+  async (req, accessToken, refreshToken, profile, done) => {
+    try {
+      const state = JSON.parse(Buffer.from(req.query.state, 'base64').toString('ascii'));
+      console.log("Passport.js");
 
-    if (!user) {
-      user = await User.create({
-        email: profile.emails[0].value,
-        provider: 'linkedin',
-        providerId: profile.id,
-        name: profile.displayName,
-        profilePicture: profile.photos?.[0]?.value
-      });
-    } else if (!user.profilePicture && profile.photos?.length) {
-      await user.update({ profilePicture: profile.photos[0].value });
+      // console.log(state);
+
+      const userType = state.userType;
+      const action = state.action;
+      // console.log(profile);
+      if (action == 'login') {
+        let user;
+        console.log("Login");
+
+        if (userType === 'hr') {
+          user = await HR.findOne({ where: { email: profile.emails[0].value } });
+        } else if (userType === 'hrManager') {
+          user = await HRManager.findOne({ where: { email: profile.emails[0].value } });
+        } else {
+          user = await Candidate.findOne({ where: { email: profile.emails[0].value } });
+        }
+        if (!user) {
+          return done(null, user, { message: 'User not found', success: false });
+        }
+        return done(null, user, { message: 'Logged in successfully', userType, success: true });
+      }
+      else {
+        let user;
+        if (userType === 'hr') {
+          user = await HR.findOne({ where: { email: profile.emails[0].value } });
+        } else if (userType === 'hrManager') {
+          user = await HRManager.findOne({ where: { email: profile.emails[0].value } });
+        } else {
+          user = await Candidate.findOne({ where: { email: profile.emails[0].value } });
+        }
+        if (user) {
+          return done(null, false, { message: 'User already exists, Use Login Page to log into your account', success: false });
+        }
+        if (!user) {
+          if (userType === 'hr') {
+            user = await HR.create({ email: profile.emails[0].value, name: profile.displayName });
+          } else if (userType === 'hrManager') {
+            user = await HRManager.create({ email: profile.emails[0].value, name: profile.displayName });
+          } else {
+            user = await Candidate.create({ email: profile.emails[0].value, name: profile.displayName });
+          }
+        }
+        return done(null, user, { message: 'Signed up successfully', success: true });
+      }
+    } catch (error) {
+      return done(error, false, { message: 'Something went wrong, Try again after some time', success: false });
     }
-    return done(null, user);
-  } catch (error) {
-    return done(error);
   }
-}
 ));
 
 // Add these lines for session support
@@ -127,17 +224,21 @@ passport.serializeUser((user, done) => {
 });
 
 passport.deserializeUser(async (obj, done) => {
-  let user;
-  if (obj.type === 'Candidate') {
-    user = await Candidate.findByPk(obj.id);
-  } else if (obj.type === 'HR') {
-    user = await HR.findByPk(obj.id);
-  } else if (obj.type === 'HRManager') {
-    user = await HRManager.findByPk(obj.id);
-  } else {
-    return done(new Error('Invalid user type'));
+  try {
+    let user;
+    if (obj.type === 'Candidate') {
+      user = await Candidate.findByPk(obj.id);
+    } else if (obj.type === 'HR') {
+      user = await HR.findByPk(obj.id);
+    } else if (obj.type === 'HRManager') {
+      user = await HRManager.findByPk(obj.id);
+    } else {
+      return done(new Error('Invalid user type'));
+    }
+    done(null, user);
+  } catch (error) {
+    done(error);
   }
-  done(null, user);
 });
 
 module.exports = passport;
