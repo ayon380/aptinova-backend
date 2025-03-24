@@ -1,33 +1,61 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/database');
-
-const HR = sequelize.define('HR', {
+const { DataTypes } = require("sequelize");
+const sequelize = require("../config/database");
+const Organization = require("./organization");
+const HR = sequelize.define("HR", {
   id: {
     type: DataTypes.UUID,
     defaultValue: DataTypes.UUIDV4,
-    primaryKey: true
+    primaryKey: true,
   },
   email: {
     type: DataTypes.STRING,
     unique: true,
-    allowNull: false
+    allowNull: false,
   },
   password: {
     type: DataTypes.STRING,
-    allowNull: true
+    allowNull: true,
   },
   name: {
     type: DataTypes.STRING,
-    allowNull: true
+    allowNull: true,
+  },
+  status: {
+    type: DataTypes.STRING,
+    defaultValue: "dormant",
+  },
+  googleAccessToken: {
+    type: DataTypes.STRING,
+  },
+  googleRefreshToken: {
+    type: DataTypes.STRING,
   },
   profilePicture: {
     type: DataTypes.STRING,
-    allowNull: true
+    allowNull: true,
   },
   department: {
     type: DataTypes.STRING,
-    allowNull: true
-  }
+    allowNull: true,
+  },
+  onboardingToken: {
+    type: DataTypes.STRING,
+  },
+  onboardingTokenExpiry: {
+    type: DataTypes.DATE,
+  },
+  organizationId: {
+    type: DataTypes.UUID,
+    references: {
+      model: Organization,
+      key: "id",
+    },
+  },
+  createdAt: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+  },
 });
+HR.belongsTo(Organization, { foreignKey: "organizationId" });
 
 module.exports = HR;

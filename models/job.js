@@ -1,5 +1,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
+const Organization = require('./organization');
 
 const Job = sequelize.define('Job', {
   id: {
@@ -7,12 +8,28 @@ const Job = sequelize.define('Job', {
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true
   },
+  OrgName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    validate: {
+      notEmpty: { msg: "Organization name cannot be empty" },
+      len: { args: [2, 100], msg: "Organization name must be between 2 and 100 characters" }
+    }
+  },
+  subdomain: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    validate: {
+      notEmpty: { msg: "Subdomain cannot be empty" },
+      len: { args: [2, 100], msg: "Subdomain must be between 2 and 100 characters" },
+    }
+  },
   title: {
     type: DataTypes.STRING,
     allowNull: false,
     validate: {
       notEmpty: { msg: "Job title cannot be empty" },
-      len: { args: [5, 100], msg: "Job title must be between 5 and 100 characters" }
+      len: { args: [2, 100], msg: "Job title must be between 5 and 100 characters" }
     }
   },
   description: {
@@ -22,6 +39,13 @@ const Job = sequelize.define('Job', {
       notEmpty: { msg: "Job description cannot be empty" },
       len: { args: [20, 5000], msg: "Job description must be between 20 and 5000 characters" }
     }
+  },
+  organizationId: {
+    type: DataTypes.UUID,
+    references: {
+      model: Organization,
+      key: 'id',
+    },
   },
   location: {
     type: DataTypes.STRING,
@@ -47,26 +71,8 @@ const Job = sequelize.define('Job', {
     }
   },
   benefits: {
-    type: DataTypes.ARRAY(DataTypes.STRING), // For PostgreSQL; use JSONB for other DBs
+    type: DataTypes.TEXT, // For PostgreSQL; use JSONB for other DBs
     allowNull: true,
-    validate: {
-      isArray(value) {
-        if (!Array.isArray(value)) {
-          throw new Error("Benefits must be an array of strings");
-        }
-      }
-    }
-  },
-  perks: {
-    type: DataTypes.ARRAY(DataTypes.STRING),
-    allowNull: true,
-    validate: {
-      isArray(value) {
-        if (!Array.isArray(value)) {
-          throw new Error("Perks must be an array of strings");
-        }
-      }
-    }
   },
   employmentType: {
     type: DataTypes.ENUM('Full-time', 'Part-time', 'Contract', 'Temporary', 'Internship'),
@@ -93,30 +99,15 @@ const Job = sequelize.define('Job', {
     }
   },
   experienceRequired: {
-    type: DataTypes.STRING,
+    type: DataTypes.INTEGER,
     allowNull: true,
     validate: {
-      len: { args: [2, 100], msg: "Experience details must be between 2 and 100 characters" }
+      min: { args: [0], msg: "Experience required must be a non-negative integer" }
     }
   },
   qualifications: {
-    type: DataTypes.ARRAY(DataTypes.STRING), // For PostgreSQL; use JSONB for other DBs
+    type: DataTypes.TEXT, // For PostgreSQL; use JSONB for other DBs
     allowNull: true,
-    validate: {
-      isArray(value) {
-        if (!Array.isArray(value)) {
-          throw new Error("Qualifications must be an array of strings");
-        }
-      }
-    }
-  },
-  company: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    validate: {
-      notEmpty: { msg: "Company name cannot be empty" },
-      len: { args: [2, 100], msg: "Company name must be between 2 and 100 characters" }
-    }
   },
   status: {
     type: DataTypes.ENUM('Open', 'Closed', 'Paused'),
@@ -136,16 +127,10 @@ const Job = sequelize.define('Job', {
   industry: {
     type: DataTypes.STRING,
     allowNull: true,
-    validate: {
-      len: { args: [2, 50], msg: "Industry must be between 2 and 50 characters" }
-    }
   },
   applicationLink: {
     type: DataTypes.STRING,
     allowNull: true,
-    validate: {
-      isUrl: { msg: "Application link must be a valid URL" }
-    }
   },
   remoteEligibility: {
     type: DataTypes.BOOLEAN,
@@ -156,7 +141,7 @@ const Job = sequelize.define('Job', {
     allowNull: true
   },
   languageRequirements: {
-    type: DataTypes.ARRAY(DataTypes.STRING),
+    type: DataTypes.STRING,
     allowNull: true
   },
   visaSponsorshipAvailable: {

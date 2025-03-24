@@ -1,37 +1,89 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/database');
+const { Model, DataTypes } = require("sequelize");
+const sequelize = require("../config/database");
+const Organization = require("./organization");
 
-const HRManager = sequelize.define('HRManager', {
-  id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
-    primaryKey: true
+class HRManager extends Model {}
+
+HRManager.init(
+  {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
+    subscriptionId: {
+      type: DataTypes.STRING,
+    },
+    subscriptionStatus: {
+      type: DataTypes.ENUM("active", "inactive", "cancelled"),
+      defaultValue: "inactive",
+    },
+    subscriptionPlanId: {
+      type: DataTypes.STRING,
+    },
+    subscriptionStartDate: {
+      type: DataTypes.DATE,
+    },
+    subscriptionEndDate: {
+      type: DataTypes.DATE,
+    },
+    subscriptionType: {
+      type: DataTypes.ENUM("FREE", "STARTUP", "ENTERPRISE", "CUSTOM"),
+      defaultValue: "FREE",
+    },
+    subscriptionTier: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    email: {
+      type: DataTypes.STRING,
+      unique: true,
+      allowNull: false,
+    },
+    password: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    name: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    profilePicture: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    status: {
+      type: DataTypes.STRING,
+      defaultValue: "dormant",
+    },
+    department: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    role: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    googleAccessToken: {
+      type: DataTypes.STRING,
+    },
+    googleRefreshToken: {
+      type: DataTypes.STRING,
+    },
+    organizationId: {
+      type: DataTypes.UUID,
+      references: {
+        model: Organization,
+        key: "id",
+      },
+    },
   },
-  email: {
-    type: DataTypes.STRING,
-    unique: true,
-    allowNull: false
-  },
-  password: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-  name: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-  profilePicture: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-  department: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-  role: {
-    type: DataTypes.STRING,
-    allowNull: true
+  {
+    sequelize,
+    modelName: "HRManager",
   }
-});
+);
+
+HRManager.belongsTo(Organization, { foreignKey: "organizationId" });
 
 module.exports = HRManager;
