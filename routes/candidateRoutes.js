@@ -1,10 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const Candidate = require("../models/candidate");
-const multer = require('multer');
-const cloudinary = require('cloudinary').v2;
+const multer = require("multer");
+const cloudinary = require("cloudinary").v2;
 const { authenticateJWT, authorizeUserType } = require("../middleware/auth");
-const { generateProfilePictureColors } = require('../utils/materialyou/colour');
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
@@ -35,8 +34,8 @@ router.put(
   authenticateJWT,
   authorizeUserType("candidate"),
   upload.fields([
-    { name: 'resume', maxCount: 1 },
-    { name: 'profileImage', maxCount: 1 }
+    { name: "resume", maxCount: 1 }, // Adjust to match client field name
+    { name: "profileImage", maxCount: 1 },
   ]),
   async (req, res) => {
     try {
@@ -59,12 +58,12 @@ router.put(
         linkedin,
         github,
         portfolio,
-        bio
+        bio,
       } = req.body;
 
       const candidateId = req.user.id;
       const candidate = await Candidate.findByPk(candidateId);
-      
+
       if (!candidate) {
         return res.status(404).json({ error: "Candidate not found" });
       }
@@ -75,7 +74,10 @@ router.put(
         const uploadStream = () => {
           return new Promise((resolve, reject) => {
             const stream = cloudinary.uploader.upload_stream(
-              { resource_type: 'raw', public_id: `resume_${candidateId}_${Date.now()}.pdf` },
+              {
+                resource_type: "raw",
+                public_id: `resume_${candidateId}_${Date.now()}.pdf`,
+              },
               (error, result) => {
                 if (error) reject(error);
                 resolve(result.secure_url);
@@ -88,65 +90,93 @@ router.put(
       }
 
       // Handle profile image upload
-      let profileImageUrl = candidate.profileImage; // Keep existing profile image URL by default
-      let colorScheme = candidate.colors;
+      let profilePictureUrl = candidate.profilePicture; // Keep existing profile image URL by default
+      console.log(req.files.profileImage);
+
+      let colourScheme = candidate.colours;
       if (req.files?.profileImage?.[0]) {
-        const uploadImageStream = () => {
-          return new Promise((resolve, reject) => {
-            const stream = cloudinary.uploader.upload_stream(
-              { resource_type: 'image', public_id: `profile_${candidateId}_${Date.now()}` },
-              (error, result) => {
-                if (error) reject(error);
-                resolve(result.secure_url);
-              }
-            );
-            stream.end(req.files.profileImage[0].buffer);
-          });
-        };
-        profileImageUrl = await uploadImageStream();
-        
-        // Generate new color scheme from profile image
         try {
-          colorScheme = await generateProfilePictureColors(profileImageUrl);
-        } catch (colorError) {
-          console.error('Error generating color scheme:', colorError);
+          const uploadImageStream = () => {
+            return new Promise((resolve, reject) => {
+              const stream = cloudinary.uploader.upload_stream(
+                {
+                  resource_type: "image",
+                  public_id: `profile_${candidateId}_${Date.now()}`,
+                },
+                (error, result) => {
+                  if (error) {
+                    console.error("Cloudinary upload error:", error);
+                    reject(error);
+                  }
+                  console.log("Cloudinary result:", result);
+                  resolve(result.secure_url);
+                }
+              );
+              stream.end(req.files.profileImage[0].buffer);
+            });
+          };
+          console.log("Starting image upload...");
+          profilePictureUrl = await uploadImageStream();
+          console.log("Upload complete. Profile image URL:", profilePictureUrl);
+          
+          if (!profilePictureUrl) {
+            throw new Error("Failed to get URL from Cloudinary");
+          }
+        } catch (uploadError) {
+          console.error("Image upload error:", uploadError);
+          throw uploadError;
         }
       }
 
+      console.log("Before update - Profile image URL:", profilePictureUrl);
+      console.log("Candidate columns:", Object.keys(candidate.rawAttributes));
+
       // Parse JSON strings if they're provided as strings
-      const parsedSkills = typeof skills === 'string' ? JSON.parse(skills) : skills;
-      const parsedLanguages = typeof languages === 'string' ? JSON.parse(languages) : languages;
-      const parsedCertifications = typeof certifications === 'string' ? JSON.parse(certifications) : certifications;
-      const parsedEducation = typeof education === 'string' ? JSON.parse(education) : education;
+      const parsedSkills =
+        typeof skills === "string" ? JSON.parse(skills) : skills;
+      const parsedLanguages =
+        typeof languages === "string" ? JSON.parse(languages) : languages;
+      const parsedCertifications =
+        typeof certifications === "string"
+          ? JSON.parse(certifications)
+          : certifications;
+      const parsedEducation =
+        typeof education === "string" ? JSON.parse(education) : education;
 
-      const updatedCandidate = await candidate.update({
-        firstName,
-        lastName,
-        phone,
-        title,
-        experience,
-        industry,
-        location,
-        desiredSalary,
-        workPreference,
-        country,
-        currency,
-        skills: parsedSkills,
-        languages: parsedLanguages,
-        certifications: parsedCertifications,
-        education: parsedEducation,
-        linkedin,
-        github,
-        portfolio,
-        bio,
-        resume: resumeUrl,
-        profileImage: profileImageUrl,
-        colors: colorScheme
-      });
+      const [rowsUpdated, [finalCandidate]] = await Candidate.update(
+        {
+          firstName,
+          lastName,
+          phone,
+          title,
+          experience,
+          industry,
+          location,
+          desiredSalary,
+          workPreference,
+          country,
+          currency,
+          skills: parsedSkills,
+          languages: parsedLanguages,
+          certifications: parsedCertifications,
+          education: parsedEducation,
+          linkedin,
+          github,
+          portfolio,
+          bio,
+          resume: resumeUrl,
+          profilePicture: profilePictureUrl || candidate.profilePicture, // Fallback to existing image if upload fails
+          colours: colourScheme,
+        },
+        { where: { id: candidateId }, returning: true }
+      );
 
-      res.json(updatedCandidate);
+      console.log("Rows updated:", rowsUpdated);
+      console.log("After update - Profile image URL:", finalCandidate.profilePicture);
+
+      res.json(finalCandidate);
     } catch (error) {
-      console.error('Profile update error:', error);
+      console.error("Profile update error:", error);
       res.status(500).json({ error: error.message });
     }
   }

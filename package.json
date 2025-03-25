@@ -12,7 +12,6 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@material/material-color-utilities": "^0.3.0",
     "@passwordless-id/webauthn": "^2.3.0",
     "@simplewebauthn/server": "^13.1.1",
     "aptinova-backend": "file:",
