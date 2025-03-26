@@ -33,9 +33,28 @@ const rpName = "Aptinova";
 const rpID = process.env.WEBAUTHN_RP_ID || "localhost";
 const origin = process.env.WEBAUTHN_ORIGIN || "http://localhost:4000";
 
+// Update the token generation function to also create refresh tokens
 const generateToken = (user) => {
-  return jwt.sign({ id: user.id, type: user.type }, process.env.JWT_SECRET, {
-    expiresIn: "24h",
+  const accessToken = jwt.sign({ id: user.id, type: user.type }, process.env.JWT_SECRET, {
+    expiresIn: "1h", // Shorter lifetime for access tokens
+  });
+  
+  const refreshToken = jwt.sign({ id: user.id, type: user.type }, process.env.REFRESH_TOKEN_SECRET || "refresh-secret-key", {
+    expiresIn: "7d", // Longer lifetime for refresh tokens
+  });
+  
+  return { accessToken, refreshToken };
+};
+
+// Helper function to set refresh token cookie
+const setRefreshTokenCookie = (res, refreshToken) => {
+  // Set HTTP-only cookie that can't be accessed via JavaScript
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production', // Only use HTTPS in production
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+    path: '/auth/refresh-token', // Only accessible by the refresh endpoint
   });
 };
 
@@ -202,6 +221,7 @@ router.post("/resend-verifcation", async (req, res) => {
   res.json({ message: "Verification code sent to email" });
 });
 
+// Update the verify endpoint to return refresh tokens as well
 router.post("/verify", async (req, res) => {
   const { email, code, userType } = req.body;
   const verificationRecord = await VerificationCode.findOne({
@@ -221,7 +241,7 @@ router.post("/verify", async (req, res) => {
   } else {
     return res.status(400).json({ error: "Invalid user type" });
   }
-  if (userType != "candidate") {
+  if (userType != "candidate" && user.status != "dormant") {
     if (userType == "hrManager") {
       subdomain = await getCompanySubdomain(user);
     } else {
@@ -230,20 +250,30 @@ router.post("/verify", async (req, res) => {
   }
   if (!user) return res.status(400).json({ error: "User not found" });
 
-  const token = generateToken({ id: user.id, type: userType });
+  const tokens = generateToken({ id: user.id, type: userType });
   await verificationRecord.destroy(); // Delete the verification code after successful verification
+  
+  // Set refresh token in HTTP-only cookie
+  setRefreshTokenCookie(res, tokens.refreshToken);
+  
   if (user.status == "dormant") {
     if (userType == "candidate") {
       return res.redirect(
-        `${process.env.FRONTEND_URL}/auth/get-started/${userType}?token=${token}`
+        `${process.env.FRONTEND_URL}/auth/get-started/${userType}?token=${tokens.accessToken}`
       );
     } else if (userType == "hrManager") {
       return res.redirect(
-        `${process.env.FRONTEND_URL}/auth/get-started/org?token=${token}`
+        `${process.env.FRONTEND_URL}/auth/get-started/org?token=${tokens.accessToken}`
       );
     }
   }
-  res.json({ token, userType, subdomain });
+  
+  // Return only the access token in the response body (refresh token in cookie)
+  res.json({ 
+    token: tokens.accessToken,
+    userType, 
+    subdomain 
+  });
 });
 
 router.post("/login", async (req, res) => {
@@ -295,6 +325,7 @@ router.get("/google", (req, res, next) => {
   })(req, res, next);
 });
 
+// Update the Google auth callback to use cookies for refresh tokens
 router.get("/google/callback", (req, res, next) => {
   passport.authenticate(
     "google",
@@ -326,7 +357,10 @@ router.get("/google/callback", (req, res, next) => {
       }
       // Authentication successful
       if (user) {
-        const token = generateToken({ id: user.id, type: info.userType });
+        const tokens = generateToken({ id: user.id, type: info.userType });
+        // Set refresh token in cookie
+        setRefreshTokenCookie(res, tokens.refreshToken);
+        
         const state = JSON.parse(
           Buffer.from(req.query.state, "base64").toString()
         );
@@ -334,25 +368,25 @@ router.get("/google/callback", (req, res, next) => {
           let userType = info.userType;
           const redirectPath =
             info.userType === "candidate"
-              ? `/auth/get-started/${info.userType}?token=${token}`
-              : `/auth/get-started/org?token=${token}`;
+              ? `/auth/get-started/${info.userType}?token=${tokens.accessToken}`
+              : `/auth/get-started/org?token=${tokens.accessToken}`;
           return res.redirect(
             await constructRedirectUrl(
               process.env.FRONTEND_URL,
               user,
               userType,
-              token,
+              tokens.accessToken,
               redirectPath
             )
           );
         }
-        // Generate token using the authenticated user
+        
         const redirectUrl = await constructRedirectUrl(
           process.env.FRONTEND_URL,
           user,
           info.userType,
-          token,
-          state.redirectUri ? `${state.redirectUri}?token=${token}` : null
+          tokens.accessToken,
+          state.redirectUri ? `${state.redirectUri}?token=${tokens.accessToken}` : null
         );
         return res.redirect(redirectUrl);
       } else {
@@ -382,6 +416,7 @@ router.get("/microsoft", (req, res, next) => {
   })(req, res, next);
 });
 
+// Update the Microsoft auth callback to use cookies for refresh tokens
 router.get("/microsoft/callback", (req, res, next) => {
   passport.authenticate(
     "microsoft",
@@ -413,7 +448,10 @@ router.get("/microsoft/callback", (req, res, next) => {
       }
       // Authentication successful
       if (user) {
-        const token = generateToken({ id: user.id, type: info.userType }); //
+        const tokens = generateToken({ id: user.id, type: info.userType }); 
+        // Set refresh token in cookie
+        setRefreshTokenCookie(res, tokens.refreshToken);
+        
         const state = JSON.parse(
           Buffer.from(req.query.state, "base64").toString()
         );
@@ -421,20 +459,20 @@ router.get("/microsoft/callback", (req, res, next) => {
           if (userType == "candidate") {
             const redirectPath =
               info.userType === "candidate"
-                ? `/auth/get-started/${info.userType}?token=${token}`
-                : `/auth/get-started/org?token=${token}`;
+                ? `/auth/get-started/${info.userType}?token=${tokens.accessToken}`
+                : `/auth/get-started/org?token=${tokens.accessToken}`;
             return res.redirect(
               await constructRedirectUrl(
                 process.env.FRONTEND_URL,
                 user,
                 userType,
-                token,
+                tokens.accessToken,
                 redirectPath
               )
             );
           } else if (userType == "hrManager") {
             return res.redirect(
-              `${process.env.FRONTEND_URL}/auth/get-started/org?token=${token}`
+              `${process.env.FRONTEND_URL}/auth/get-started/org?token=${tokens.accessToken}`
             );
           }
         }
@@ -443,8 +481,8 @@ router.get("/microsoft/callback", (req, res, next) => {
           process.env.FRONTEND_URL,
           user,
           info.userType,
-          token,
-          state.redirectUri ? `${state.redirectUri}?token=${token}` : null
+          tokens.accessToken,
+          state.redirectUri ? `${state.redirectUri}?token=${tokens.accessToken}` : null
         );
         return res.redirect(redirectUrl);
       } else {
@@ -474,6 +512,7 @@ router.get("/linkedin", (req, res, next) => {
   })(req, res, next);
 });
 
+// Update the LinkedIn auth callback to use cookies for refresh tokens
 router.get("/linkedin/callback", (req, res, next) => {
   passport.authenticate(
     "linkedin",
@@ -505,7 +544,10 @@ router.get("/linkedin/callback", (req, res, next) => {
       }
       // Authentication successful
       if (user) {
-        const token = generateToken({ id: user.id, type: info.userType }); // Generate token using the authenticated user
+        const tokens = generateToken({ id: user.id, type: info.userType });
+        // Set refresh token in cookie
+        setRefreshTokenCookie(res, tokens.refreshToken);
+        
         const state = JSON.parse(
           Buffer.from(req.query.state, "base64").toString()
         );
@@ -513,20 +555,20 @@ router.get("/linkedin/callback", (req, res, next) => {
           if (userType == "candidate") {
             const redirectPath =
               info.userType === "candidate"
-                ? `/auth/get-started/${info.userType}?token=${token}`
-                : `/auth/get-started/org?token=${token}`;
+                ? `/auth/get-started/${info.userType}?token=${tokens.accessToken}`
+                : `/auth/get-started/org?token=${tokens.accessToken}`;
             return res.redirect(
               await constructRedirectUrl(
                 process.env.FRONTEND_URL,
                 user,
                 userType,
-                token,
+                tokens.accessToken,
                 redirectPath
               )
             );
           } else if (userType == "hrManager") {
             return res.redirect(
-              `${process.env.FRONTEND_URL}/auth/get-started/org?token=${token}`
+              `${process.env.FRONTEND_URL}/auth/get-started/org?token=${tokens.accessToken}`
             );
           }
         }
@@ -535,8 +577,8 @@ router.get("/linkedin/callback", (req, res, next) => {
           process.env.FRONTEND_URL,
           user,
           info.userType,
-          token,
-          state.redirectUri ? `${state.redirectUri}?token=${token}` : null
+          tokens.accessToken,
+          state.redirectUri ? `${state.redirectUri}?token=${tokens.accessToken}` : null
         );
         return res.redirect(redirectUrl);
       } else {
@@ -795,6 +837,7 @@ router.post(
   }
 );
 
+// Update passkey authentication to include refresh tokens
 router.post(
   "/passkey/authenticate/verify",
   [validateSession],
@@ -850,10 +893,13 @@ router.post(
           counter: verification.authenticationInfo.newCounter,
         });
 
-        const token = generateToken({
+        const tokens = generateToken({
           id: credential.userId,
           type: credential.userType,
         });
+
+        // Set refresh token in HTTP-only cookie
+        setRefreshTokenCookie(res, tokens.refreshToken);
 
         // Clean up the used session
         await session.destroy();
@@ -867,7 +913,12 @@ router.post(
           }
         }
 
-        res.json({ token, userType: credential.userType, subdomain });
+        // Return only the access token in the response body
+        res.json({ 
+          token: tokens.accessToken,
+          userType: credential.userType, 
+          subdomain 
+        });
       } else {
         res.status(400).json({ error: "Verification failed" });
       }
@@ -998,6 +1049,57 @@ router.post("/reset-password", async (req, res) => {
     console.error("Reset password error:", error);
     res.status(500).json({ error: "Failed to reset password" });
   }
+});
+
+// Update refresh token endpoint to use the cookie
+router.post("/refresh-token", async (req, res) => {
+  // Get refresh token from cookie instead of request body
+  const refreshToken = req.cookies.refreshToken;
+  
+  if (!refreshToken) {
+    return res.status(400).json({ error: "Refresh token is required" });
+  }
+  
+  // Verify the refresh token
+  const { verifyRefreshToken } = require("../middleware/auth");
+  const userData = verifyRefreshToken(refreshToken);
+  
+  if (!userData) {
+    // Clear the invalid cookie
+    res.clearCookie('refreshToken', { path: '/auth/refresh-token' });
+    return res.status(401).json({ error: "Invalid or expired refresh token" });
+  }
+  
+  // Generate new tokens
+  const tokens = generateToken({ id: userData.id, type: userData.type });
+  
+  // Set new refresh token cookie
+  setRefreshTokenCookie(res, tokens.refreshToken);
+  
+  // Return only the new access token in the response
+  res.json({
+    accessToken: tokens.accessToken,
+    userType: userData.type
+  });
+});
+
+// Enhance the logout endpoint with additional security and functionality
+router.post("/logout", (req, res) => {
+  // Clear the refresh token cookie with the same options used to set it
+  res.clearCookie('refreshToken', { 
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/auth/refresh-token' 
+  });
+  
+  res.json({ success: true, message: "Logged out successfully" });
+});
+
+// Add an endpoint to verify token validity without refreshing
+router.post("/verify-token", [authenticateJWT], (req, res) => {
+  // If authenticateJWT middleware passed, the token is valid
+  res.json({ valid: true, user: { id: req.user.id, type: req.user.type } });
 });
 
 module.exports = router;

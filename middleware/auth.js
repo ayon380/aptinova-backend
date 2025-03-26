@@ -3,17 +3,27 @@ const Candidate = require('../models/candidate');
 const HRManager = require('../models/hrManager');
 
 const authenticateJWT = (req, res, next) => {
-  const token = req.header('Authorization').replace('Bearer ', '');
-  if (!token) {
+  const authHeader = req.header('Authorization');
+  if (!authHeader) {
     return res.status(401).json({ success: false, message: 'Access token is missing or invalid' });
   }
-
+  
+  const token = authHeader.replace('Bearer ', '');
+  
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
     next();
   } catch (error) {
     return res.status(401).json({ success: false, message: 'Invalid token' });
+  }
+};
+
+const verifyRefreshToken = (token) => {
+  try {
+    return jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
+  } catch (error) {
+    return null;
   }
 };
 
@@ -44,4 +54,5 @@ const authorizeUserType = (userType) => {
 module.exports = {
   authenticateJWT,
   authorizeUserType,
+  verifyRefreshToken,
 };

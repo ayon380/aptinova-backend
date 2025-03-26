@@ -5,7 +5,6 @@ const cors = require("cors");
 const session = require("express-session");
 const sequelize = require("../config/database");
 const cookieParser = require("cookie-parser");
-const SessionStore = require("connect-session-sequelize")(session.Store);
 require("../config/passport");
 
 const app = express();
@@ -25,14 +24,8 @@ app.use(
 
 app.use(express.json());
 
-const store = new SessionStore({
-  db: sequelize
-});
-store.sync();
-
 app.use(
   session({
-    store,
     secret: process.env.SESSION_SECRET || "your-secret-key",
     resave: false,
     saveUninitialized: false,

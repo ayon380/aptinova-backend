@@ -3,8 +3,8 @@ const router = express.Router();
 const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
 const Candidate = require("../models/candidate");
-const { Organization } = require("../models/organization");
-const { HRManager } = require("../models/hrManager");
+const Organization = require("../models/organization"); // Fix import
+const HRManager = require("../models/hrManager");
 const sequelize = require("../config/database");
 const { authenticateJWT, authorizeUserType } = require("../middleware/auth");
 
@@ -139,13 +139,11 @@ router.post(
     } catch (error) {
       console.log(error);
 
-      res
-        .status(500)
-        .json({
-          success: false,
-          message: "Something went wrong",
-          error: error.message,
-        });
+      res.status(500).json({
+        success: false,
+        message: "Something went wrong",
+        error: error.message,
+      });
     }
   }
 );
@@ -160,7 +158,6 @@ router.post(
       const {
         companyName,
         email,
-        password,
         website,
         phone,
         industry,
@@ -180,22 +177,42 @@ router.post(
         culture,
       } = req.body;
 
+      // Parse JSON strings
+      const parsedContactPerson = JSON.parse(contactPerson);
+      const parsedBenefits = JSON.parse(benefits || "[]");
+      const parsedCulture = JSON.parse(culture || "[]");
+
       // Upload logo to cloudinary
       let logoUrl = "";
       if (req.file) {
-        const result = await cloudinary.uploader
-          .upload_stream({ resource_type: "image" }, (error, result) => {
-            if (error) throw error;
-            logoUrl = result.secure_url;
-          })
-          .end(req.file.buffer);
+        try {
+          const uploadLogoStream = () => {
+            return new Promise((resolve, reject) => {
+              const stream = cloudinary.uploader.upload_stream(
+                { resource_type: "image", public_id: `org_logo_${Date.now()}` },
+                (error, result) => {
+                  if (error) return reject(error);
+                  resolve(result.secure_url);
+                }
+              );
+              stream.end(req.file.buffer);
+            });
+          };
+          logoUrl = await uploadLogoStream();
+        } catch (error) {
+          console.error("Logo upload error:", error);
+          return res.status(500).json({
+            success: false,
+            message: "Failed to upload logo",
+            error: error.message,
+          });
+        }
       }
 
       // Save organization details
       const organization = await Organization.create({
         companyName,
         email,
-        password,
         website,
         phone,
         industry,
@@ -207,30 +224,20 @@ router.post(
         city,
         country,
         zipCode,
-        contactPerson,
+        contactPerson: parsedContactPerson,
         description,
         logo: logoUrl,
         linkedin,
         twitter,
-        benefits,
-        culture,
+        benefits: parsedBenefits,
+        culture: parsedCulture,
       });
 
       // Create a new table for the organization's employees
-      const employeeTableName = `${organization.companyName
-        .replace(/\s+/g, "_")
-        .toLowerCase()}_employees`;
-      await sequelize.query(`CREATE TABLE ${employeeTableName} (
-      id SERIAL PRIMARY KEY,
-      uid UUID,
-      name VARCHAR(255),
-      email VARCHAR(255),
-      role VARCHAR(255)
-    )`);
 
       // Update HRManager details and add to the organization's employee table
       const hrManager = await HRManager.findOne({
-        where: { email: req.body.hrManagerEmail },
+        where: { email: req.body.email },
       });
       if (!hrManager) {
         return res
@@ -248,14 +255,13 @@ router.post(
         organizationId: organization.id,
       });
 
-      await sequelize.query(`INSERT INTO ${employeeTableName} (uid, name, email, role) VALUES
-      ('${hrManager.id}', '${hrManager.name}', '${hrManager.email}', 'HR Manager')`);
-
       res.status(201).json({ success: true, organization });
     } catch (error) {
+      console.log(error);
+
       res
         .status(500)
-        .json({ success: false, message: "Something went wrong", error });
+        .json({ success: false, message: error.message, error: error });
     }
   }
 );
