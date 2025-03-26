@@ -26,7 +26,7 @@ app.use(express.json());
 const sessionStore = new SequelizeStore({
   db: sequelize,
   checkExpirationInterval: 15 * 60 * 1000, // Clean up expired sessions every 15 mins
-  expiration: 24 * 60 * 60 * 1000 // Sessions expire after 1 day
+  expiration: 24 * 60 * 60 * 1000, // Sessions expire after 1 day
 });
 
 app.use(
@@ -37,8 +37,8 @@ app.use(
     store: sessionStore,
     cookie: {
       maxAge: 3600000,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     },
   })
 );
