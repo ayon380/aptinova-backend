@@ -66,12 +66,12 @@ passport.use(
       try {
         // Check if there's a state parameter and it's valid before parsing
         if (!req.query.state) {
-          return done(null, false, { 
-            message: "Invalid state parameter", 
-            success: false 
+          return done(null, false, {
+            message: "Invalid state parameter",
+            success: false,
           });
         }
-        
+
         let state;
         try {
           state = JSON.parse(
@@ -79,19 +79,21 @@ passport.use(
           );
         } catch (error) {
           console.error("Failed to parse state:", error);
-          return done(null, false, { 
-            message: "Invalid state format", 
-            success: false 
+          return done(null, false, {
+            message: "Invalid state format",
+            success: false,
           });
         }
-        
+
         console.log("Passport.js");
+        console.log(state);
+        console.log(profile);
 
         // Validate required state properties
         if (!state || !state.userType || !state.action) {
-          return done(null, false, { 
-            message: "Missing required state parameters", 
-            success: false 
+          return done(null, false, {
+            message: "Missing required state parameters",
+            success: false,
           });
         }
 
