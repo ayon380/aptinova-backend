@@ -833,32 +833,6 @@ router.post(
   [validateSession],
   async (req, res) => {
     try {
-      const { email, userType } = req.body;
-      let user;
-
-      if (userType === "candidate") {
-        user = await Candidate.findOne({ where: { email } });
-      } else if (userType === "hr") {
-        user = await HR.findOne({ where: { email } });
-      } else if (userType === "hrManager") {
-        user = await HRManager.findOne({ where: { email } });
-      }
-
-      if (!user) {
-        return res.status(400).json({ error: "User not found" });
-      }
-
-      const credentials = await Passkey.findAll({
-        where: { userId: user.id },
-      });
-
-      if (credentials.length === 0) {
-        return res
-          .status(400)
-          .json({ error: "No passkeys found for this user" });
-      }
-      console.log(credentials[0].cred_id);
-
       const options = await generateAuthenticationOptions({
         rpID,
         allowCredentials: [],
@@ -867,18 +841,14 @@ router.post(
       });
 
       console.log(options);
-      await WebAuthnSession.destroy({
-        where: { userId: user.id },
-      });
+      const sessionId = crypto.randomBytes(16).toString("hex");
       const session = await WebAuthnSession.create({
-        userId: user.id,
+        id: sessionId,
         challenge: options.challenge,
-        email: user.email,
-        userType: userType,
         expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes expiry
       });
 
-      res.json(options);
+      res.json({options, sessionId});
     } catch (error) {
       console.error("Authentication options error:", error);
       res.status(500).json({ error: error.message });
@@ -893,6 +863,8 @@ router.post(
   async (req, res) => {
     try {
       console.log("Signin Response" + JSON.stringify(req.body));
+      const sessionId = req.body.sessionId;
+      console.log("Session ID" + sessionId);
 
       const credentialId = req.body.asseResp.id || req.body.rawId;
       if (!credentialId) {
@@ -910,9 +882,8 @@ router.post(
       // Get the most recent valid session for this user
       const session = await WebAuthnSession.findOne({
         where: {
-          expiresAt: { [Op.gt]: new Date() },
+          id: sessionId,
         },
-        order: [["createdAt", "DESC"]],
       });
 
       if (!session) {

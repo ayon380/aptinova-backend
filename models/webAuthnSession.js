@@ -3,23 +3,10 @@ const sequelize = require("../config/database");
 
 const WebAuthnSession = sequelize.define("WebAuthnSession", {
   id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
+    type: DataTypes.STRING,
     primaryKey: true,
   },
-  userId: {
-    type: DataTypes.UUID,
-    allowNull: false,
-  },
-  email: {
-    type: DataTypes.STRING,
-    unique: true,
-    allowNull: false,
-  },
-  userType: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
+
   challenge: {
     type: DataTypes.TEXT,
     allowNull: false,
