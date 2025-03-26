@@ -12,12 +12,7 @@ const app = express();
 app.use(cookieParser());
 app.use(
   cors({
-    origin: new RegExp(
-      `^https?://([a-z0-9-]+\\.)*${process.env.FRONTEND_URL.replace(
-        /^https?:\/\//,
-        ""
-      )}$`
-    ),
+    origin: ["https://aptinova.tech", "http://localhost:4000"],
     credentials: true,
   })
 );
