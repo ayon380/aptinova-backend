@@ -333,68 +333,86 @@ router.get("/google/callback", (req, res, next) => {
       session: true,
     },
     async (err, user, info) => {
-      console.log(user + info.message + info.userType);
+      console.log("Google callback - Error:", err);
+      console.log("Google callback - User:", user);
+      console.log("Google callback - Info:", info);
 
       if (err) {
-        console.error(err);
-        const message = embedURIComponent(
-          info && info.message
-            ? info.message
-            : "Authentication failed due to server error"
-        );
+        console.error("Authentication error:", err);
         return res.redirect(
-          `${process.env.FRONTEND_URL}/auth/callback?message=${message}`
+          `${process.env.FRONTEND_URL}/auth/callback?message=${encodeURIComponent("Authentication failed due to server error")}`
         );
       }
+      
+      // Check if info is undefined and handle accordingly
+      if (!info) {
+        info = { message: "Unknown authentication error", success: false };
+      }
+      
       if (!user) {
-        const message =
-          info && info.message ? info.message : "Authentication failed";
+        const message = info.message || "Authentication failed";
         return res.redirect(
-          `${
-            process.env.FRONTEND_URL
-          }/auth/callback?message=${encodeURIComponent(message)}`
+          `${process.env.FRONTEND_URL}/auth/callback?message=${encodeURIComponent(message)}`
         );
       }
+      
       // Authentication successful
       if (user) {
-        const tokens = generateToken({ id: user.id, type: info.userType });
-        // Set refresh token in cookie
-        setRefreshTokenCookie(res, tokens.refreshToken);
-        
-        const state = JSON.parse(
-          Buffer.from(req.query.state, "base64").toString()
-        );
-        if (user.status == "dormant") {
-          let userType = info.userType;
-          const redirectPath =
-            info.userType === "candidate"
-              ? `/auth/get-started/${info.userType}?token=${tokens.accessToken}`
-              : `/auth/get-started/org?token=${tokens.accessToken}`;
+        try {
+          const tokens = generateToken({ id: user.id, type: info.userType || "candidate" });
+          // Set refresh token in cookie
+          setRefreshTokenCookie(res, tokens.refreshToken);
+          
+          let state = {};
+          if (req.query.state) {
+            try {
+              state = JSON.parse(
+                Buffer.from(req.query.state, "base64").toString()
+              );
+            } catch (error) {
+              console.error("Failed to parse state in callback:", error);
+              state = {};
+            }
+          }
+          
+          // Use safe default values if state properties are missing
+          const userType = info.userType || state.userType || "candidate";
+          
+          if (user.status == "dormant") {
+            const redirectPath =
+              userType === "candidate"
+                ? `/auth/get-started/${userType}?token=${tokens.accessToken}`
+                : `/auth/get-started/org?token=${tokens.accessToken}`;
+            
+            return res.redirect(
+              await constructRedirectUrl(
+                process.env.FRONTEND_URL,
+                user,
+                userType,
+                tokens.accessToken,
+                redirectPath
+              )
+            );
+          }
+          
+          const redirectUrl = await constructRedirectUrl(
+            process.env.FRONTEND_URL,
+            user,
+            userType,
+            tokens.accessToken,
+            state.redirectUri ? `${state.redirectUri}?token=${tokens.accessToken}` : null
+          );
+          return res.redirect(redirectUrl);
+        } catch (error) {
+          console.error("Error generating redirect URL:", error);
           return res.redirect(
-            await constructRedirectUrl(
-              process.env.FRONTEND_URL,
-              user,
-              userType,
-              tokens.accessToken,
-              redirectPath
-            )
+            `${process.env.FRONTEND_URL}/auth/callback?message=${encodeURIComponent("Error processing login")}`
           );
         }
-        
-        const redirectUrl = await constructRedirectUrl(
-          process.env.FRONTEND_URL,
-          user,
-          info.userType,
-          tokens.accessToken,
-          state.redirectUri ? `${state.redirectUri}?token=${tokens.accessToken}` : null
-        );
-        return res.redirect(redirectUrl);
       } else {
         const message = info && info.message ? info.message : "Login failed";
         return res.redirect(
-          `${
-            process.env.FRONTEND_URL
-          }/auth/callback?message=${encodeURIComponent(message)}`
+          `${process.env.FRONTEND_URL}/auth/callback?message=${encodeURIComponent(message)}`
         );
       }
     }

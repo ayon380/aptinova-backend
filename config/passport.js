@@ -47,12 +47,16 @@ const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
+const redirect =
+  process.env.NODE_ENV === "production"
+    ? "https://api.aptinova.tech/auth/google/callback"
+    : "http://localhost:3000/auth/google/callback";
 passport.use(
   new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "https://api.aptinova.tech/auth/google/callback",
+      callbackURL: redirect,
       passReqToCallback: true, // Important: This allows you to access the request object
       scope: GOOGLE_SCOPES, // Add calendar scope
       accessType: "offline",
@@ -60,12 +64,36 @@ passport.use(
     },
     async (req, accessToken, refreshToken, profile, done) => {
       try {
-        const state = JSON.parse(
-          Buffer.from(req.query.state, "base64").toString("ascii")
-        );
+        // Check if there's a state parameter and it's valid before parsing
+        if (!req.query.state) {
+          return done(null, false, { 
+            message: "Invalid state parameter", 
+            success: false 
+          });
+        }
+        
+        let state;
+        try {
+          state = JSON.parse(
+            Buffer.from(req.query.state, "base64").toString("ascii")
+          );
+        } catch (error) {
+          console.error("Failed to parse state:", error);
+          return done(null, false, { 
+            message: "Invalid state format", 
+            success: false 
+          });
+        }
+        
         console.log("Passport.js");
 
-        // console.log(state);
+        // Validate required state properties
+        if (!state || !state.userType || !state.action) {
+          return done(null, false, { 
+            message: "Missing required state parameters", 
+            success: false 
+          });
+        }
 
         const userType = state.userType;
         const action = state.action;

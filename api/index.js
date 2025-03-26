@@ -7,6 +7,9 @@ const sequelize = require("../config/database");
 const cookieParser = require("cookie-parser");
 require("../config/passport");
 
+// Import the sequelize store constructor
+const SequelizeStore = require("connect-session-sequelize")(session.Store);
+
 const app = express();
 
 app.use(cookieParser());
@@ -19,16 +22,29 @@ app.use(
 
 app.use(express.json());
 
+// Create session store with Sequelize
+const sessionStore = new SequelizeStore({
+  db: sequelize,
+  checkExpirationInterval: 15 * 60 * 1000, // Clean up expired sessions every 15 mins
+  expiration: 24 * 60 * 60 * 1000 // Sessions expire after 1 day
+});
+
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "your-secret-key",
     resave: false,
     saveUninitialized: false,
+    store: sessionStore,
     cookie: {
       maxAge: 3600000,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
     },
   })
 );
+
+// Initialize the session store tables
+sessionStore.sync();
 
 app.use(passport.initialize());
 app.use(passport.session());
