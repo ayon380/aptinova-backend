@@ -52,11 +52,11 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "/auth/google/callback",
+      callbackURL: "https://api.aptinova.tech/auth/google/callback",
       passReqToCallback: true, // Important: This allows you to access the request object
       scope: GOOGLE_SCOPES, // Add calendar scope
       accessType: "offline",
-      prompt: "consent",
+      // prompt: "consent",
     },
     async (req, accessToken, refreshToken, profile, done) => {
       try {

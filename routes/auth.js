@@ -319,7 +319,7 @@ router.get("/google", (req, res, next) => {
   passport.authenticate("google", {
     scope: GOOGLE_SCOPES,
     accessType: "offline",
-    prompt: "consent",
+    // prompt: "consent",
     state: state,
     session: true, // Ensure session is enabled
   })(req, res, next);
