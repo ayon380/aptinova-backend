@@ -39,7 +39,7 @@ const generateToken = (user) => {
     { id: user.id, type: user.type },
     process.env.JWT_SECRET,
     {
-      expiresIn: "1h", // Shorter lifetime for access tokens
+      expiresIn: "24h", // Shorter lifetime for access tokens
     }
   );
 
@@ -47,7 +47,7 @@ const generateToken = (user) => {
     { id: user.id, type: user.type },
     process.env.REFRESH_TOKEN_SECRET || "refresh-secret-key",
     {
-      expiresIn: "7d", // Longer lifetime for refresh tokens
+      expiresIn: "100d", // Longer lifetime for refresh tokens
     }
   );
 
@@ -61,8 +61,8 @@ const setRefreshTokenCookie = (res, refreshToken) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production", // Only use HTTPS in production
     sameSite: "strict",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-    path: "/auth/refresh-token", // Only accessible by the refresh endpoint
+    maxAge: 100 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+    path: "/", // Only accessible by the refresh endpoint
   });
 };
 
@@ -640,7 +640,7 @@ router.get("/linkedin/callback", (req, res, next) => {
   )(req, res, next);
 });
 
-router.get("/user", requireAuth, async (req, res) => {
+router.get("/user", authenticateJWT, async (req, res) => {
   let user;
   if (req.user.type === "candidate") {
     user = await Candidate.findByPk(req.user.id);
@@ -652,12 +652,7 @@ router.get("/user", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "Invalid user type" });
   }
   if (!user) return res.status(404).json({ error: "User not found" });
-  res.json({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    profilePicture: user.profilePicture,
-  });
+  res.json({ user, userType: req.user.type });
 });
 
 router.put("/user", requireAuth, async (req, res) => {
@@ -691,6 +686,7 @@ router.put("/user", requireAuth, async (req, res) => {
 });
 
 const PasskeyChallenge = require("../models/passkeyChallenge");
+const { auth } = require("googleapis/build/src/apis/abusiveexperiencereport");
 
 router.post(
   "/passkey/register/options",
@@ -848,7 +844,7 @@ router.post(
         expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes expiry
       });
 
-      res.json({options, sessionId});
+      res.json({ options, sessionId });
     } catch (error) {
       console.error("Authentication options error:", error);
       res.status(500).json({ error: error.message });
@@ -1071,13 +1067,28 @@ router.post("/reset-password", async (req, res) => {
   }
 });
 
-// Update refresh token endpoint to use the cookie
+const InvalidToken = require("../models/invalidToken");
+// Update refresh token endpoint to check for invalidated tokens
 router.post("/refresh-token", async (req, res) => {
-  // Get refresh token from cookie instead of request body
   const refreshToken = req.cookies.refreshToken;
 
   if (!refreshToken) {
     return res.status(400).json({ error: "Refresh token is required" });
+  }
+
+  // Check if token has been invalidated
+  const invalidated = await InvalidToken.findOne({
+    where: { token: refreshToken }
+  });
+
+  if (invalidated) {
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+    });
+    return res.status(401).json({ error: "Token has been invalidated" });
   }
 
   // Verify the refresh token
@@ -1085,8 +1096,12 @@ router.post("/refresh-token", async (req, res) => {
   const userData = verifyRefreshToken(refreshToken);
 
   if (!userData) {
-    // Clear the invalid cookie
-    res.clearCookie("refreshToken", { path: "/auth/refresh-token" });
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+    });
     return res.status(401).json({ error: "Invalid or expired refresh token" });
   }
 
@@ -1096,22 +1111,43 @@ router.post("/refresh-token", async (req, res) => {
   // Set new refresh token cookie
   setRefreshTokenCookie(res, tokens.refreshToken);
 
-  // Return only the new access token in the response
+  // Invalidate the old refresh token
+  await InvalidToken.create({
+    token: refreshToken,
+    expiresAt: new Date(Date.now() + 100 * 24 * 60 * 60 * 1000), // Match refresh token expiry
+  });
+
+  // Clean up expired invalid tokens
+  await InvalidToken.cleanup();
+
   res.json({
     accessToken: tokens.accessToken,
     userType: userData.type,
   });
 });
 
-// Enhance the logout endpoint with additional security and functionality
-router.post("/logout", (req, res) => {
-  // Clear the refresh token cookie with the same options used to set it
+// Update logout endpoint to invalidate the refresh token
+router.post("/logout", async (req, res) => {
+  const refreshToken = req.cookies.refreshToken;
+
+  if (refreshToken) {
+    // Store the token in InvalidToken table
+    await InvalidToken.create({
+      token: refreshToken,
+      expiresAt: new Date(Date.now() + 100 * 24 * 60 * 60 * 1000), // Match refresh token expiry
+    });
+  }
+
+  // Clear the refresh token cookie
   res.clearCookie("refreshToken", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
-    path: "/auth/refresh-token",
+    path: "/",
   });
+
+  // Clean up expired invalid tokens
+  await InvalidToken.cleanup();
 
   res.json({ success: true, message: "Logged out successfully" });
 });
