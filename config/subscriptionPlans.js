@@ -10,21 +10,21 @@ const SUBSCRIPTION_PLANS = {
   },
   HR_MANAGER: {
     STARTUP: {
-      name: 'HR Startup',
+      name: 'Startup',
       amount: 9999,
       period: 'monthly',
       interval: 1,
       features: ['Basic ATS', 'Up to 10 job posts', 'Email Support']
     },
     ENTERPRISE: {
-      name: 'HR Enterprise',
+      name: 'Enterprise',
       amount: 99999,
       period: 'monthly',
       interval: 1,
       features: ['Advanced ATS', 'Unlimited job posts', '24/7 Support']
     },
     CUSTOM: {
-      name: 'HR Custom',
+      name: 'Custom',
       period: 'monthly',
       interval: 1,
       features: ['Custom Features', 'Custom Support Level']

@@ -13,8 +13,8 @@ const Candidate = sequelize.define(
       type: DataTypes.STRING,
     },
     subscriptionStatus: {
-      type: DataTypes.ENUM('active', 'inactive', 'cancelled'),
-      defaultValue: 'inactive'
+      type: DataTypes.ENUM("active", "inactive", "cancelled"),
+      defaultValue: "inactive",
     },
     subscriptionPlanId: {
       type: DataTypes.STRING,
@@ -26,12 +26,12 @@ const Candidate = sequelize.define(
       type: DataTypes.DATE,
     },
     subscriptionType: {
-      type: DataTypes.ENUM('FREE', 'PRO'),
-      defaultValue: 'FREE'
+      type: DataTypes.ENUM("FREE", "PRO"),
+      defaultValue: "FREE",
     },
     subscriptionTier: {
       type: DataTypes.STRING,
-      allowNull: true
+      allowNull: true,
     },
     password: {
       type: DataTypes.STRING,
@@ -52,6 +52,14 @@ const Candidate = sequelize.define(
     },
     googleRefreshToken: {
       type: DataTypes.STRING,
+    },
+    resetToken: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    resetTokenExpiry: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
     lastName: {
       type: DataTypes.STRING,

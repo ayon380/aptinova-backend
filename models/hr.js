@@ -16,6 +16,14 @@ const HR = sequelize.define("HR", {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  resetToken: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  resetTokenExpiry: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
   name: {
     type: DataTypes.STRING,
     allowNull: true,

@@ -155,9 +155,10 @@ router.post(
   upload.single("logo"),
   async (req, res) => {
     try {
+      const hrManager = await HRManager.findByPk(req.user.id);
+      
       const {
         companyName,
-        email,
         website,
         phone,
         industry,
@@ -212,7 +213,7 @@ router.post(
       // Save organization details
       const organization = await Organization.create({
         companyName,
-        email,
+        email: hrManager.email,
         website,
         phone,
         industry,
@@ -236,9 +237,7 @@ router.post(
       // Create a new table for the organization's employees
 
       // Update HRManager details and add to the organization's employee table
-      const hrManager = await HRManager.findOne({
-        where: { email: req.body.email },
-      });
+
       if (!hrManager) {
         return res
           .status(404)
