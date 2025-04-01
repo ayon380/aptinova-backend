@@ -70,7 +70,7 @@ app.use("/hiring-tests", hiringTestRoutes);
 const applicantRoutes = require("../routes/applicantRoutes");
 app.use("/applicants", applicantRoutes);
 
-const hrmroutes = require("../routes/hrmRoutes");
+const hrmroutes = require("../routes/hrmroutes");
 app.use("/hrm", hrmroutes);
 
 const domainRoutes = require("../routes/domains");
