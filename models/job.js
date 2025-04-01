@@ -1,7 +1,7 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
 const Organization = require("./organization");
-
+//v0.29
 const Job = sequelize.define(
   "Job",
   {
