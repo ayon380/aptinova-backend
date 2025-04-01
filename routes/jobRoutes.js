@@ -54,6 +54,30 @@ router.get(
 
       const response = applications.map((application) => {
         const { Job, ...applicationData } = application.toJSON();
+
+        // Sanitize hiring process data to remove sensitive information
+        if (applicationData.hiringProcess) {
+          try {
+            const hiringProcess = JSON.parse(applicationData.hiringProcess);
+
+            // Remove sensitive fields from each step
+            const sanitizedHiringProcess = hiringProcess.map((step) => {
+              // Create a new object without the sensitive fields
+              const { score, id, comments, ...sanitizedStep } = step;
+              return sanitizedStep;
+            });
+
+            // Replace the original hiring process with sanitized version
+            applicationData.hiringProcess = JSON.stringify(
+              sanitizedHiringProcess
+            );
+          } catch (err) {
+            console.error("Error sanitizing hiring process:", err);
+            // If there's an error parsing, just remove the entire hiring process
+            delete applicationData.hiringProcess;
+          }
+        }
+
         return {
           ...applicationData,
           jobTitle: Job.title,
@@ -227,6 +251,7 @@ router.get("/:id", async (req, res) => {
       include: [
         {
           model: Organization,
+          as: "organization", // Add this line to match the association alias
           attributes: ["companyName", "logo", "subdomain", "industry"],
         },
       ],
@@ -304,6 +329,7 @@ router.post(
           .json({ error: "Application deadline has passed" });
       }
 
+      // Initialize applicant data
       const applicantData = {
         jobId: req.params.id,
         orgId: job.organizationId,
@@ -311,10 +337,76 @@ router.post(
         ...req.body,
       };
 
+      // Copy and modify hiring process if it exists
+      if (job.hiringProcess) {
+        try {
+          const jobHiringProcess = JSON.parse(job.hiringProcess);
+
+          // Create a new hiring process for the applicant with empty fields
+          const applicantHiringProcess = jobHiringProcess.map((step) => ({
+            type: step.type,
+            name: step.name,
+            description: step.description || "",
+            plannedDate: step.plannedDate || null,
+            id: null, // Initialize with null ID
+            status: "Pending", // Initialize with pending status
+            score: null, // Initialize with null score
+            comments: "", // Initialize with empty comments
+          }));
+
+          // Set the first step status to 'In Progress' if it's Shortlist
+          if (
+            applicantHiringProcess.length > 0 &&
+            applicantHiringProcess[0].type === "Shortlist"
+          ) {
+            applicantHiringProcess[0].status = "In Progress";
+          }
+
+          // Add the modified hiring process to applicant data
+          applicantData.hiringProcess = JSON.stringify(applicantHiringProcess);
+        } catch (error) {
+          console.error("Error processing hiring process:", error);
+          // Continue without hiring process if there's an error
+        }
+      }
+
       const applicant = await Applicant.create(applicantData);
       res.status(201).json(applicant);
     } catch (error) {
       res.status(400).json({ error: error.message });
+    }
+  }
+);
+
+// Withdraw from a job application (accessible by candidate)
+router.delete(
+  "/:id/withdraw",
+  authenticateJWT,
+  authorizeUserType("candidate"),
+  async (req, res) => {
+    try {
+      const jobId = req.params.id;
+      const candidateId = req.user.id;
+
+      // Find the application
+      const application = await Applicant.findOne({
+        where: {
+          jobId: jobId,
+          candidateId: candidateId,
+        },
+      });
+
+      if (!application) {
+        return res.status(404).json({ error: "Application not found" });
+      }
+
+      // Delete the application
+      await application.destroy();
+
+      res.status(200).json({ message: "Application withdrawn successfully" });
+    } catch (error) {
+      console.error("Error withdrawing application:", error);
+      res.status(500).json({ error: error.message });
     }
   }
 );
