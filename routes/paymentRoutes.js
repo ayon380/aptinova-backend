@@ -4,7 +4,11 @@ const Razorpay = require("razorpay");
 const Candidate = require("../models/candidate");
 const hrManager = require("../models/hrManager");
 const SubscriptionHistory = require("../models/subscriptionHistory");
-const { authenticateJWT, authorizeUserType } = require("../middleware/auth");
+const {
+  authenticateJWT,
+  authenticateUserTypes,
+  authorizeUserType,
+} = require("../middleware/auth");
 const { v4: uuidv4 } = require("uuid");
 const SUBSCRIPTION_PLANS = require("../config/subscriptionPlans");
 
@@ -35,7 +39,8 @@ router.post("/create-plan", async (req, res) => {
 router.post(
   "/create-subscription",
   authenticateJWT,
-  authorizeUserType("hrManager") || authorizeUserType("candidate"),
+  authenticateUserTypes(["hrManager", "candidate"]),
+
   async (req, res) => {
     try {
       const { userType, userId, tier, totalCount, customAmount } = req.body;

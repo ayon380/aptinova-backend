@@ -98,6 +98,7 @@ Organization.init({
 }, {
   sequelize,
   modelName: 'Organization',
+  tableName: 'organizations', // Add this line to explicitly set the table name
 });
 
 module.exports = Organization;

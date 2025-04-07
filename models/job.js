@@ -145,10 +145,21 @@ const Job = sequelize.define(
       allowNull: true,
     },
     status: {
-      type: DataTypes.ENUM("Open", "Closed", "Paused"),
+      type: DataTypes.ENUM("Open", "Closed", "Paused", "Filled"),
+      validate: {
+        isIn: {
+          args: [["Open", "Closed", "Paused", "Filled"]],
+          msg: "Status must be one of 'Open', 'Closed', 'Paused' or 'Filled'",
+        },
+      },
       defaultValue: "Open",
       allowNull: false,
     },
+    workExperience: {
+      type: DataTypes.JSONB, // For PostgreSQL; use JSON for other DBs
+      allowNull: true,
+    },
+
     jobType: {
       type: DataTypes.ENUM("On-site", "Remote", "Hybrid"),
       allowNull: false,

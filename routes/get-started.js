@@ -30,7 +30,6 @@ router.post(
   async (req, res) => {
     try {
       const {
-        email,
         firstName,
         lastName,
         phone,
@@ -41,6 +40,11 @@ router.post(
         desiredSalary,
         workPreference,
         country,
+        workExperience,
+        projects,
+        publications,
+        awards,
+        achievements,
         currency,
         skills,
         languages,
@@ -58,6 +62,37 @@ router.post(
       const parsedLanguages = JSON.parse(languages);
       const parsedCertifications = JSON.parse(certifications);
       const parsedEducation = JSON.parse(education);
+
+      // Parse workExperience and fix isPresent entries to have null endDate
+      const parsedWorkExperience = JSON.parse(workExperience || "[]").map(
+        (exp) => {
+          if (exp.isPresent === true || exp.isPresent === "true") {
+            return { ...exp, endDate: null };
+          }
+          // For non-present jobs, ensure endDate is properly formatted or null
+          if (exp.endDate === "") {
+            return { ...exp, endDate: null, isPresent: true };
+          }
+          return exp;
+        }
+      );
+
+      // Parse projects and convert technologies from string to array if needed
+      const parsedProjects = JSON.parse(projects || "[]").map((proj) => {
+        if (typeof proj.technologies === "string") {
+          return {
+            ...proj,
+            technologies: proj.technologies
+              .split(",")
+              .map((tech) => tech.trim()),
+          };
+        }
+        return proj;
+      });
+
+      const parsedPublications = JSON.parse(publications || "[]");
+      const parsedAwards = JSON.parse(awards || "[]");
+      const parsedAchievements = JSON.parse(achievements || "[]");
 
       // Upload resume to cloudinary
       let resumeUrl = "";
@@ -100,7 +135,7 @@ router.post(
       console.log(resumeUrl);
       console.log(profileImageUrl);
 
-      const candidate = await Candidate.findOne({ where: { email } });
+      const candidate = await Candidate.findByPk(req.user.id);
       if (!candidate) {
         return res
           .status(404)
@@ -123,6 +158,11 @@ router.post(
         languages: parsedLanguages,
         certifications: parsedCertifications,
         education: parsedEducation,
+        workExperience: parsedWorkExperience,
+        projects: parsedProjects,
+        publications: parsedPublications,
+        awards: parsedAwards,
+        achievements: parsedAchievements,
         linkedin,
         github,
         portfolio,
@@ -156,7 +196,7 @@ router.post(
   async (req, res) => {
     try {
       const hrManager = await HRManager.findByPk(req.user.id);
-      
+
       const {
         companyName,
         website,

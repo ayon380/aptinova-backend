@@ -28,6 +28,13 @@ router.get(
           orgId: orgid,
           jobId: req.params.jobId,
         },
+        include: [
+          {
+            model: Candidate,
+            as: "Candidate",
+            attributes: ["firstName", "email", "profilePicture", "skills"],
+          },
+        ],
       });
       res.json(applicants);
     } catch (error) {
@@ -43,7 +50,68 @@ router.get(
   authorizeUserType("candidate"),
   async (req, res) => {
     try {
-      const applicant = await Applicant.findByPk(req.params.id);
+      const applicant = await Applicant.findByPk(req.params.id, {
+        include: [
+          {
+            model: Job,
+            as: "Job",
+          },
+        ],
+      });
+
+      if (applicant) {
+        // Clone the applicant object so we can modify it without affecting the original
+        const applicantData = JSON.parse(JSON.stringify(applicant));
+
+        // Process the hiringProcess to hide sensitive fields
+        if (applicantData.hiringProcess) {
+          try {
+            let hiringProcess = JSON.parse(applicantData.hiringProcess);
+
+            // Remove score, id, and comments from each step
+            hiringProcess = hiringProcess.map((step) => {
+              const { score, id, comments, ...filteredStep } = step;
+              return filteredStep;
+            });
+
+            // Replace the original hiringProcess with the filtered one
+            applicantData.hiringProcess = JSON.stringify(hiringProcess);
+          } catch (err) {
+            console.error("Error processing hiringProcess:", err);
+            // If there's an error parsing, just send the original data
+          }
+        }
+
+        res.json(applicantData);
+      } else {
+        res.status(404).json({ error: "Applicant not found" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+//get a profile detail by Applicant ID (HR or HRManager only)
+router.get(
+  "/:id/profile",
+  authenticateJWT,
+  authorizeUserType("hrManager") || authorizeUserType("hr"),
+  async (req, res) => {
+    try {
+      const applicant = await Applicant.findByPk(req.params.id, {
+        include: [
+          {
+            model: Job,
+            as: "Job",
+          },
+          {
+            model: Candidate,
+            as: "Candidate",
+          },
+        ],
+      });
+
       if (applicant) {
         res.json(applicant);
       } else {
@@ -54,7 +122,6 @@ router.get(
     }
   }
 );
-
 // Create a new applicant (HR or HRManager only)
 router.post(
   "/",
@@ -104,14 +171,43 @@ router.put(
       if (updated) {
         const updatedApplicant = await Applicant.findByPk(req.params.id);
 
-        // Check if status was updated to "Assessment" and hiringTestId is present
-        if (req.body.status === "Assessment" && req.body.hiringTestId) {
+        // Check if hiringTestId is present
+        if (req.body.hiringTestId) {
           // Fetch additional information needed for the email
           const job = await Job.findByPk(applicant.jobId);
           const candidate = await Candidate.findByPk(applicant.candidateId);
 
+          // Update the hiring process with the test ID
+          if (updatedApplicant.hiringProcess) {
+            try {
+              const hiringProcess = JSON.parse(updatedApplicant.hiringProcess);
+              
+              // Find the specific Test step that matches the current status
+              // This handles the case where there may be multiple test steps
+              const updatedHiringProcess = hiringProcess.map(step => {
+                // Match the Test step that has a name matching the current status
+                if (step.type === "Test" && step.name === req.body.status) {
+                  return {
+                    ...step,
+                    id: req.body.hiringTestId,
+                    status: "In Progress"
+                  };
+                }
+                return step;
+              });
+              
+              // Save the updated hiring process
+              await Applicant.update(
+                { hiringProcess: JSON.stringify(updatedHiringProcess) },
+                { where: { id: req.params.id } }
+              );
+            } catch (err) {
+              console.error("Error updating hiringProcess:", err);
+            }
+          }
+
           // Generate test link
-          const testLink = `${process.env.FRONTEND_URL}/tests/${req.body.hiringTestId}/hiring-test-start`;
+          const testLink = `${process.env.FRONTEND_URL}/tests/${req.body.hiringTestId}`;
 
           // Create and send email
           const emailHtml = createTestInvitationEmail(
@@ -127,6 +223,55 @@ router.put(
           );
         }
 
+        res.json(updatedApplicant);
+      } else {
+        res.status(404).json({ error: "Applicant not found" });
+      }
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+);
+
+// Update only applicant status (HR or HRManager only)
+router.put(
+  "/:id/status",
+  authenticateJWT,
+  authorizeUserType("hrManager") || authorizeUserType("hr"),
+  async (req, res) => {
+    try {
+      const { status } = req.body;
+
+      if (!status) {
+        return res.status(400).json({ error: "Status is required" });
+      }
+
+      const hrm = await HRManager.findOne({
+        where: {
+          id: req.user.id,
+        },
+      });
+      const orgid = hrm.organizationId;
+
+      // Get the applicant before update
+      const applicant = await Applicant.findOne({
+        where: { id: req.params.id, orgId: orgid },
+      });
+
+      if (!applicant) {
+        return res.status(404).json({ error: "Applicant not found" });
+      }
+
+      // Update only the status
+      const [updated] = await Applicant.update(
+        { status },
+        {
+          where: { id: req.params.id, orgId: orgid },
+        }
+      );
+
+      if (updated) {
+        const updatedApplicant = await Applicant.findByPk(req.params.id);
         res.json(updatedApplicant);
       } else {
         res.status(404).json({ error: "Applicant not found" });

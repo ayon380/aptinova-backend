@@ -267,6 +267,45 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+router.get(
+  "/candidate/:id",
+  authenticateJWT,
+  authorizeUserType("candidate"),
+  async (req, res) => {
+    try {
+      const job = await Job.findByPk(req.params.id, {
+        include: [
+          {
+            model: Organization,
+            as: "organization", // Add this line to match the association alias
+            attributes: ["companyName", "logo", "subdomain", "industry"],
+          },
+        ],
+      });
+
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      // Check if the candidate has already applied to this job
+      const application = await Applicant.findOne({
+        where: {
+          jobId: req.params.id,
+          candidateId: req.user.id,
+        },
+      });
+
+      // Add isApplied flag to response
+      const jobData = job.toJSON();
+      jobData.isApplied = !!application;
+
+      res.json(jobData);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
 // Create a new job (HR or HRManager only)
 router.post(
   "/",
@@ -332,6 +371,7 @@ router.post(
       // Initialize applicant data
       const applicantData = {
         jobId: req.params.id,
+        score : Math.floor(Math.random() * 100), // Random score for demo purposes
         orgId: job.organizationId,
         candidateId: req.user.id,
         ...req.body,

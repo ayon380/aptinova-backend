@@ -1,6 +1,6 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
-
+const validate = require("validator");
 const Candidate = sequelize.define(
   "Candidate",
   {
@@ -101,11 +101,283 @@ const Candidate = sequelize.define(
     languages: {
       type: DataTypes.ARRAY(DataTypes.STRING),
     },
+    workExperience: {
+      type: DataTypes.JSONB,
+      validate: {
+        isValidExperience(value) {
+          if (!Array.isArray(value)) {
+            throw new Error("Work experience must be an array.");
+          }
+          for (const entry of value) {
+            if (typeof entry !== "object" || entry === null) {
+              throw new Error("Each work experience entry must be an object.");
+            }
+            if (!entry.company || typeof entry.company !== "string") {
+              throw new Error(
+                "Each work experience entry must include a valid company name."
+              );
+            }
+            if (!entry.position || typeof entry.position !== "string") {
+              throw new Error(
+                "Each work experience entry must include a valid position."
+              );
+            }
+            if (!entry.description || typeof entry.description !== "string") {
+              throw new Error(
+                "Each work experience entry must include a valid description."
+              );
+            }
+            if (
+              !entry.startDate ||
+              isNaN(new Date(entry.startDate).getTime())
+            ) {
+              throw new Error(
+                "Each work experience entry must include a valid start date."
+              );
+            }
+            if (entry.endDate && isNaN(new Date(entry.endDate).getTime())) {
+              throw new Error(
+                "Each work experience entry must include a valid end date."
+              );
+            }
+            if (
+              entry.endDate &&
+              new Date(entry.startDate) > new Date(entry.endDate)
+            ) {
+              throw new Error(
+                "End date must be after start date for each work experience entry."
+              );
+            }
+            if (entry.isPresent && new Date(entry.startDate) > new Date()) {
+              throw new Error(
+                "Start date cannot be in the future if isPresent is true."
+              );
+            }
+            if (entry.endDate && new Date(entry.startDate) > new Date()) {
+              throw new Error(
+                "Start date cannot be in the future if end date is provided."
+              );
+            }
+            if (entry.isPresent && entry.endDate) {
+              throw new Error("If isPresent is true, endDate must be null.");
+            }
+          }
+        },
+      },
+    },
+    projects: {
+      type: DataTypes.JSONB,
+      validate: {
+        isValidProjects(value) {
+          if (!Array.isArray(value)) {
+            throw new Error("Projects must be an array.");
+          }
+          for (const entry of value) {
+            if (typeof entry !== "object" || entry === null) {
+              throw new Error("Each project entry must be an object.");
+            }
+            if (!entry.title || typeof entry.title !== "string") {
+              throw new Error("Each project entry must include a valid title.");
+            }
+            if (!entry.description || typeof entry.description !== "string") {
+              throw new Error(
+                "Each project entry must include a valid description."
+              );
+            }
+            if (!entry.technologies || !Array.isArray(entry.technologies)) {
+              throw new Error(
+                "Each project entry must include a valid technologies array."
+              );
+            }
+            if (!entry.link || typeof entry.link !== "string") {
+              throw new Error("Each project entry must include a valid link.");
+            }
+            if (
+              !entry.startDate ||
+              isNaN(new Date(entry.startDate).getTime())
+            ) {
+              throw new Error(
+                "Each project entry must include a valid start date."
+              );
+            }
+            if (entry.endDate && isNaN(new Date(entry.endDate).getTime())) {
+              throw new Error(
+                "Each project entry must include a valid end date."
+              );
+            }
+            if (
+              entry.endDate &&
+              new Date(entry.startDate) > new Date(entry.endDate)
+            ) {
+              throw new Error(
+                "End date must be after start date for each project entry."
+              );
+            }
+          }
+        },
+      },
+    },
     certifications: {
-      type: DataTypes.ARRAY(DataTypes.STRING),
+      type: DataTypes.JSONB,
+      validate: {
+        isValidCertifications(value) {
+          if (!Array.isArray(value)) {
+            throw new Error("Certifications must be an array.");
+          }
+          for (const entry of value) {
+            if (typeof entry !== "object" || entry === null) {
+              throw new Error("Each certification entry must be an object.");
+            }
+            if (!entry.title || typeof entry.title !== "string") {
+              throw new Error(
+                "Each certification entry must include a valid title."
+              );
+            }
+            if (!entry.issuer || typeof entry.issuer !== "string") {
+              throw new Error(
+                "Each certification entry must include a valid issuer."
+              );
+            }
+            if (
+              !entry.issueDate ||
+              isNaN(new Date(entry.issueDate).getTime())
+            ) {
+              throw new Error(
+                "Each certification entry must include a valid issue date."
+              );
+            }
+          }
+        },
+      },
+    },
+    publications: {
+      type: DataTypes.JSONB,
+      validate: {
+        isValidPublications(value) {
+          if (!Array.isArray(value)) {
+            throw new Error("Publications must be an array.");
+          }
+          for (const entry of value) {
+            if (typeof entry !== "object" || entry === null) {
+              throw new Error("Each publication entry must be an object.");
+            }
+            if (!entry.title || typeof entry.title !== "string") {
+              throw new Error(
+                "Each publication entry must include a valid title."
+              );
+            }
+            if (!entry.description || typeof entry.description !== "string") {
+              throw new Error(
+                "Each publication entry must include a valid description."
+              );
+            }
+            if (!entry.link || typeof entry.link !== "string") {
+              throw new Error(
+                "Each publication entry must include a valid link."
+              );
+            }
+          }
+        },
+      },
+    },
+    awards: {
+      type: DataTypes.JSONB,
+      validate: {
+        isValidAwards(value) {
+          if (!Array.isArray(value)) {
+            throw new Error("Awards must be an array.");
+          }
+          for (const entry of value) {
+            if (typeof entry !== "object" || entry === null) {
+              throw new Error("Each award entry must be an object.");
+            }
+            if (!entry.title || typeof entry.title !== "string") {
+              throw new Error("Each award entry must include a valid title.");
+            }
+            if (!entry.issuer || typeof entry.issuer !== "string") {
+              throw new Error("Each award entry must include a valid issuer.");
+            }
+          }
+        },
+      },
+    },
+    achievements: {
+      type: DataTypes.JSONB,
+      validate: {
+        isValidAchievements(value) {
+          if (!Array.isArray(value)) {
+            throw new Error("Achievements must be an array.");
+          }
+          for (const entry of value) {
+            if (typeof entry !== "object" || entry === null) {
+              throw new Error("Each achievement entry must be an object.");
+            }
+            if (!entry.title || typeof entry.title !== "string") {
+              throw new Error(
+                "Each achievement entry must include a valid title."
+              );
+            }
+            if (!entry.description || typeof entry.description !== "string") {
+              throw new Error(
+                "Each achievement entry must include a valid description."
+              );
+            }
+            if (!entry.date || isNaN(new Date(entry.date).getTime())) {
+              throw new Error(
+                "Each achievement entry must include a valid date."
+              );
+            }
+          }
+        },
+      },
     },
     education: {
       type: DataTypes.JSONB,
+      validate: {
+        isValidEducation(value) {
+          if (!Array.isArray(value)) {
+            throw new Error("Education must be an array.");
+          }
+          for (const entry of value) {
+            if (typeof entry !== "object" || entry === null) {
+              throw new Error("Each education entry must be an object.");
+            }
+            if (!entry.institution || typeof entry.institution !== "string") {
+              throw new Error(
+                "Each education entry must include a valid institution."
+              );
+            }
+            if (!entry.degree || typeof entry.degree !== "string") {
+              throw new Error(
+                "Each education entry must include a valid degree."
+              );
+            }
+            if (!entry.fieldOfStudy || typeof entry.fieldOfStudy !== "string") {
+              throw new Error(
+                "Each education entry must include a valid field of study."
+              );
+            }
+            if (
+              !entry.startDate ||
+              isNaN(new Date(entry.startDate).getTime())
+            ) {
+              throw new Error(
+                "Each education entry must include a valid start date."
+              );
+            }
+            if (!entry.currentlyStudying && !entry.endDate) {
+              throw new Error(
+                "If currentlyStudying is false, endDate must be provided."
+              );
+            }
+            if (entry.endDate && isNaN(new Date(entry.endDate).getTime())) {
+              throw new Error(
+                "Each education entry must include a valid end date."
+              );
+            }
+          }
+        },
+      },
     },
     linkedin: {
       type: DataTypes.STRING,
@@ -132,6 +404,8 @@ const Candidate = sequelize.define(
   },
   {
     timestamps: true,
+    tableName: "candidates",
+    freezeTableName: true,
   }
 );
 

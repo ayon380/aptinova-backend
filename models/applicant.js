@@ -53,17 +53,13 @@ const Applicant = sequelize.define(
         max: { args: [100], msg: "Score must be at most 100" },
       },
     },
+    warnings: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
     status: {
-      type: DataTypes.ENUM(
-        "Applied",
-        "In Progress",
-        "Assessment",
-        "Completed",
-        "Rejected",
-        "Accepted"
-      ),
+      type: DataTypes.STRING,
       defaultValue: "Applied",
-      allowNull: false,
     },
     startTime: {
       type: DataTypes.DATE,
@@ -183,18 +179,6 @@ const Applicant = sequelize.define(
                   );
                 }
 
-                // Ensure plannedDate is before completedDate
-                if (step.plannedDate && step.completedDate) {
-                  const planned = new Date(step.plannedDate);
-                  const completed = new Date(step.completedDate);
-                  if (planned > completed) {
-                    throw new Error(
-                      `Step ${
-                        index + 1
-                      }: plannedDate must be before completedDate.`
-                    );
-                  }
-                }
               });
             } catch (err) {
               throw new Error(`Invalid hiring process format: ${err.message}`);
@@ -214,4 +198,5 @@ const Applicant = sequelize.define(
 Applicant.belongsTo(Job, { foreignKey: "jobId" });
 Applicant.belongsTo(Organization, { foreignKey: "orgId" });
 Applicant.belongsTo(HiringTest, { foreignKey: "hiringTestId" });
+Applicant.belongsTo(Candidate, { foreignKey: "candidateId" });
 module.exports = Applicant;
