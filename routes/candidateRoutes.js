@@ -59,6 +59,7 @@ router.put(
         github,
         portfolio,
         bio,
+        colors,
       } = req.body;
 
       const candidateId = req.user.id;
@@ -67,6 +68,7 @@ router.put(
       if (!candidate) {
         return res.status(404).json({ error: "Candidate not found" });
       }
+      console.log(colors);
 
       // Handle resume upload
       let resumeUrl = candidate.resume; // Keep existing resume URL by default
@@ -93,7 +95,7 @@ router.put(
       let profilePictureUrl = candidate.profilePicture; // Keep existing profile image URL by default
       console.log(req.files.profileImage);
 
-      let colourScheme = candidate.colours;
+      // let colorscheme = candidate.colors;
       if (req.files?.profileImage?.[0]) {
         try {
           const uploadImageStream = () => {
@@ -118,7 +120,7 @@ router.put(
           console.log("Starting image upload...");
           profilePictureUrl = await uploadImageStream();
           console.log("Upload complete. Profile image URL:", profilePictureUrl);
-          
+
           if (!profilePictureUrl) {
             throw new Error("Failed to get URL from Cloudinary");
           }
@@ -142,7 +144,9 @@ router.put(
           : certifications;
       const parsedEducation =
         typeof education === "string" ? JSON.parse(education) : education;
-
+      const parsedcolors =
+        typeof colors === "string" ? JSON.parse(colors) : colors;
+      console.log("Parsed colors:", parsedcolors);
       const [rowsUpdated, [finalCandidate]] = await Candidate.update(
         {
           firstName,
@@ -166,13 +170,16 @@ router.put(
           bio,
           resume: resumeUrl,
           profilePicture: profilePictureUrl || candidate.profilePicture, // Fallback to existing image if upload fails
-          colours: colourScheme,
+          colours: parsedcolors, // Fallback to existing colors if not provided
         },
         { where: { id: candidateId }, returning: true }
       );
 
       console.log("Rows updated:", rowsUpdated);
-      console.log("After update - Profile image URL:", finalCandidate.profilePicture);
+      console.log(
+        "After update - Profile image URL:",
+        finalCandidate.profilePicture
+      );
 
       res.json(finalCandidate);
     } catch (error) {

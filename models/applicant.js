@@ -178,7 +178,6 @@ const Applicant = sequelize.define(
                     }: completedDate must be in YYYY-MM-DD format.`
                   );
                 }
-
               });
             } catch (err) {
               throw new Error(`Invalid hiring process format: ${err.message}`);
