@@ -35,6 +35,82 @@ router.get(
   }
 );
 
+// Update HR Manager profile
+router.put(
+  "/profile",
+  authenticateJWT,
+  authorizeUserType("hrManager"),
+  upload.single("profilePicture"),
+  async (req, res) => {
+    try {
+      const { name, email, department, role } = req.body;
+      const hrManagerId = req.user.id;
+
+      // Find the HR manager
+      const hrManager = await HRManager.findByPk(hrManagerId);
+
+      if (!hrManager) {
+        return res.status(404).json({ error: "HR Manager not found" });
+      }
+
+      // Handle profile picture upload
+      let profilePictureUrl = hrManager.profilePicture; // Keep existing URL by default
+      if (req.file) {
+        try {
+          const uploadImageStream = () => {
+            return new Promise((resolve, reject) => {
+              const stream = cloudinary.uploader.upload_stream(
+                {
+                  resource_type: "image",
+                  public_id: `hr_profile_${hrManagerId}_${Date.now()}`,
+                },
+                (error, result) => {
+                  if (error) {
+                    console.error("Cloudinary upload error:", error);
+                    reject(error);
+                  }
+                  resolve(result.secure_url);
+                }
+              );
+              stream.end(req.file.buffer);
+            });
+          };
+          profilePictureUrl = await uploadImageStream();
+        } catch (uploadError) {
+          console.error("Profile picture upload error:", uploadError);
+          throw uploadError;
+        }
+      }
+
+      // Update HR Manager
+      const updateValues = {
+        name: name || hrManager.name,
+        email: email || hrManager.email,
+        department: department || hrManager.department,
+        role: role || hrManager.role,
+        profilePicture: profilePictureUrl,
+      };
+
+      const [rowsUpdated, [updatedHRManager]] = await HRManager.update(
+        updateValues,
+        { where: { id: hrManagerId }, returning: true }
+      );
+
+      // Remove sensitive information
+      delete updatedHRManager.dataValues.password;
+      delete updatedHRManager.dataValues.resetToken;
+      delete updatedHRManager.dataValues.resetTokenExpiry;
+      delete updatedHRManager.dataValues.googleAccessToken;
+      delete updatedHRManager.dataValues.googleRefreshToken;
+
+      res.json(updatedHRManager);
+    } catch (error) {
+      console.error("Profile update error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
 // Dashboard endpoint for HR Manager
 router.get(
   "/dashboard",
@@ -1506,30 +1582,68 @@ router.put(
       const parsedCulture =
         typeof culture === "string" ? JSON.parse(culture) : culture;
 
+      // Handle subdomain - could be an array field in the model
+      let parsedSubdomain = subdomain;
+      if (subdomain === "null" || subdomain === null) {
+        parsedSubdomain = null;
+      } else if (
+        typeof subdomain === "string" &&
+        subdomain.startsWith("[") &&
+        subdomain.endsWith("]")
+      ) {
+        // If it's a JSON array string
+        try {
+          parsedSubdomain = JSON.parse(subdomain);
+        } catch (e) {
+          parsedSubdomain = null;
+        }
+      }
+
+      // Update organization with proper type handling
+      const updateValues = {
+        companyName,
+        email,
+        website,
+        phone,
+        industry,
+        companySize,
+        foundedYear,
+        headquarters,
+        type,
+        address,
+        city,
+        country,
+        zipCode,
+        contactPerson: parsedContactPerson,
+        description,
+        logo: logoUrl,
+        linkedin: linkedin || null,
+        twitter: twitter || null,
+        subdomain: parsedSubdomain,
+        benefits: parsedBenefits,
+        culture: parsedCulture,
+      };
+
+      // Remove undefined values to avoid Sequelize issues
+      Object.keys(updateValues).forEach((key) => {
+        if (updateValues[key] === undefined) {
+          delete updateValues[key];
+        }
+      });
+
+      // Ensure benefits and culture are properly formatted as JSON objects, not arrays
+      if (updateValues.benefits && typeof updateValues.benefits !== "object") {
+        updateValues.benefits = {}; // Default empty object if invalid
+      }
+
+      if (updateValues.culture && typeof updateValues.culture !== "object") {
+        updateValues.culture = {}; // Default empty object if invalid
+      }
+
+      console.log("Update values:", updateValues);
+
       const [rowsUpdated, [updatedOrganization]] = await Organization.update(
-        {
-          companyName,
-          email,
-          website,
-          phone,
-          industry,
-          companySize,
-          foundedYear,
-          headquarters,
-          type,
-          address,
-          city,
-          country,
-          zipCode,
-          contactPerson: parsedContactPerson,
-          description,
-          logo: logoUrl,
-          linkedin,
-          twitter,
-          subdomain,
-          benefits: parsedBenefits,
-          culture: parsedCulture,
-        },
+        updateValues,
         { where: { id: organizationId }, returning: true }
       );
 

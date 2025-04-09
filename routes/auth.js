@@ -948,7 +948,7 @@ router.post(
 router.get("/passkeys", [authenticateJWT], async (req, res) => {
   try {
     const passkeys = await Passkey.findAll({
-      where: { userId: req.user.id },
+      where: { userId: req.user.id, userType: req.user.type },
       attributes: [
         "cred_id",
         "deviceName",
@@ -1078,7 +1078,7 @@ router.post("/refresh-token", async (req, res) => {
 
   // Check if token has been invalidated
   const invalidated = await InvalidToken.findOne({
-    where: { token: refreshToken }
+    where: { token: refreshToken },
   });
 
   if (invalidated) {

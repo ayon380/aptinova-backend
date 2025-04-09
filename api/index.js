@@ -73,6 +73,9 @@ app.use("/applicants", applicantRoutes);
 const hrmroutes = require("../routes/hrmroutes");
 app.use("/hrm", hrmroutes);
 
+const hrrouter = require("../routes/hrRoutes");
+app.use("/hr", hrrouter);
+
 const domainRoutes = require("../routes/domains");
 app.use("/domains", domainRoutes);
 

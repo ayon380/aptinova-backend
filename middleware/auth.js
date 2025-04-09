@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 const Candidate = require("../models/candidate");
 const HRManager = require("../models/hrManager");
-
+const HR = require("../models/hr");
 const authenticateJWT = (req, res, next) => {
   const authHeader = req.header("Authorization");
   if (!authHeader) {
@@ -39,6 +39,8 @@ const authorizeUserType = (userType) => {
         user = await Candidate.findByPk(req.user.id);
       } else if (userType === "hrManager") {
         user = await HRManager.findByPk(req.user.id);
+      } else if (userType === "hr") {
+        user = await HR.findByPk(req.user.id);
       }
 
       if (!user) {
@@ -65,6 +67,8 @@ const authenticateUserTypes = (userTypes) => {
           user = await Candidate.findByPk(req.user.id);
         } else if (type === "hrManager") {
           user = await HRManager.findByPk(req.user.id);
+        } else if (type === "hr") {
+          user = await HR.findByPk(req.user.id);
         }
         if (user) break;
       }

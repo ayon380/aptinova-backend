@@ -88,11 +88,11 @@ Organization.init({
     allowNull: true,
   },  
   benefits: {
-    type: DataTypes.ARRAY(DataTypes.STRING),
+    type: DataTypes.JSONB,
     allowNull: true,
   },
   culture: {
-    type: DataTypes.ARRAY(DataTypes.STRING),
+    type: DataTypes.JSONB,
     allowNull: true,
   },
 }, {

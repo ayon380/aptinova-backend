@@ -4,6 +4,9 @@ const Candidate = require("../models/candidate");
 const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
 const { authenticateJWT, authorizeUserType } = require("../middleware/auth");
+const Applicant = require("../models/applicant");
+const Job = require("../models/job");
+const Organization = require("../models/organization");
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
@@ -184,6 +187,135 @@ router.put(
       res.json(finalCandidate);
     } catch (error) {
       console.error("Profile update error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+router.get(
+  "/home",
+  authenticateJWT,
+  authorizeUserType("candidate"),
+  async (req, res) => {
+    try {
+      const candidateId = req.user.id;
+
+      // Fetch candidate's profile information
+      const candidate = await Candidate.findByPk(candidateId);
+      if (!candidate) {
+        return res.status(404).json({ error: "Candidate not found" });
+      }
+
+      // Fetch all applications by the candidate
+      const applications = await Applicant.findAll({
+        where: { candidateId },
+        include: [
+          {
+            model: Job,
+            attributes: [
+              "id",
+              "title",
+              "description",
+              "location",
+              "jobType",
+              "employmentType",
+              "deadline",
+            ],
+          },
+          {
+            model: Organization,
+            attributes: ["id", "companyName", "logo"],
+          },
+        ],
+      });
+
+      // Process applications to extract upcoming events and statuses
+      const processedApplications = applications.map((app) => {
+        const application = app.toJSON();
+
+        // Parse hiring process steps if they exist
+        let upcomingEvents = [];
+        if (application.hiringProcess) {
+          try {
+            const hiringProcess = JSON.parse(application.hiringProcess);
+
+            // Extract upcoming tests, interviews, etc.
+            upcomingEvents = hiringProcess
+              .filter((step) => {
+                // Include steps that have a planned date but are not completed
+                return (
+                  step.plannedDate &&
+                  !step.completedDate &&
+                  new Date(step.plannedDate) >= new Date()
+                );
+              })
+              .map((step) => ({
+                type: step.type,
+                name: step.name,
+                description: step.description || "",
+                date: step.plannedDate,
+                jobId: application.jobId,
+                jobTitle: application.Job.title,
+                companyName: application.Organization.companyName,
+                companyLogo: application.Organization.logo,
+              }))
+              .sort((a, b) => new Date(a.date) - new Date(b.date));
+          } catch (error) {
+            console.error(
+              `Error parsing hiring process for application ${application.id}:`,
+              error
+            );
+          }
+        }
+
+        return {
+          id: application.id,
+          status: application.status,
+          score: application.score,
+          appliedAt: application.createdAt,
+          job: application.Job,
+          organization: application.Organization,
+          upcomingEvents,
+        };
+      });
+
+      // Extract all upcoming events across all applications
+      const allUpcomingEvents = processedApplications
+        .flatMap((app) => app.upcomingEvents)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      // Calculate statistics
+      const applicationStats = {
+        total: applications.length,
+        byStatus: applications.reduce((acc, app) => {
+          acc[app.status] = (acc[app.status] || 0) + 1;
+          return acc;
+        }, {}),
+      };
+
+      // Build the final response
+      const homeData = {
+        profile: {
+          id: candidate.id,
+          firstName: candidate.firstName,
+          lastName: candidate.lastName,
+          email: candidate.email,
+          title: candidate.title,
+          profilePicture: candidate.profilePicture,
+          status: candidate.status,
+          subscriptionType: candidate.subscriptionType,
+          subscriptionStatus: candidate.subscriptionStatus,
+        },
+        applications: {
+          stats: applicationStats,
+          recent: processedApplications.slice(0, 5), // Get 5 most recent applications
+        },
+        upcomingEvents: allUpcomingEvents.slice(0, 10), // Get 10 nearest upcoming events
+      };
+
+      res.json(homeData);
+    } catch (error) {
+      console.error("Error fetching home data:", error);
       res.status(500).json({ error: error.message });
     }
   }
