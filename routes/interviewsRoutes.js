@@ -1,7 +1,7 @@
 const { google } = require("googleapis");
 const express = require("express");
 const router = express.Router();
-const { authenticateJWT, authorizeUserType } = require("../middleware/auth");
+const { authenticateJWT, authorizeUserType,authorizeUserTypes } = require("../middleware/auth");
 const { sum } = require("../models/organization");
 const Interview = require("../models/interview");
 const {
@@ -30,7 +30,7 @@ const calendar = google.calendar({ version: "v3", auth: oauth2Client });
 router.post(
   "/schedule",
   authenticateJWT,
-  authorizeUserType("hrManager") || authorizeUserType("hr"),
+  authorizeUserTypes(["hrManager", "candidate"]),
   async (req, res) => {
     try {
       console.log("Starting interview scheduling process");

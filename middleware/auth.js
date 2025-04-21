@@ -58,7 +58,7 @@ const authorizeUserType = (userType) => {
     }
   };
 };
-const authenticateUserTypes = (userTypes) => {
+const authorizeUserTypes = (userTypes) => {
   return async (req, res, next) => {
     try {
       let user = null;
@@ -89,6 +89,6 @@ const authenticateUserTypes = (userTypes) => {
 module.exports = {
   authenticateJWT,
   authorizeUserType,
-  authenticateUserTypes,
+  authorizeUserTypes,
   verifyRefreshToken,
 };

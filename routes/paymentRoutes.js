@@ -6,7 +6,7 @@ const hrManager = require("../models/hrManager");
 const SubscriptionHistory = require("../models/subscriptionHistory");
 const {
   authenticateJWT,
-  authenticateUserTypes,
+  authorizeUserTypes,
   authorizeUserType,
 } = require("../middleware/auth");
 const { v4: uuidv4 } = require("uuid");
@@ -39,7 +39,7 @@ router.post("/create-plan", async (req, res) => {
 router.post(
   "/create-subscription",
   authenticateJWT,
-  authenticateUserTypes(["hrManager", "candidate"]),
+  authorizeUserTypes(["hrManager", "candidate"]),
 
   async (req, res) => {
     try {

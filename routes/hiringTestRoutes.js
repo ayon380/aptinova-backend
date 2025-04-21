@@ -2,7 +2,11 @@ const express = require("express");
 const router = express.Router();
 const HiringTest = require("../models/hiringTest");
 const Applicant = require("../models/applicant"); // Add this line
-const { authenticateJWT, authorizeUserType } = require("../middleware/auth");
+const {
+  authenticateJWT,
+  authorizeUserType,
+  authorizeUserTypes,
+} = require("../middleware/auth");
 const HRManager = require("../models/hrManager");
 const HIRING_TESTS = require("../config/tests"); // Add this line to import ready-made tests
 const sequelize = require("../config/database");
@@ -10,7 +14,7 @@ const sequelize = require("../config/database");
 router.get(
   "/ready-made",
   authenticateJWT,
-  authorizeUserType("hrManager") || authorizeUserType("hr"),
+  authorizeUserTypes(["hrManager", "candidate"]),
   async (req, res) => {
     try {
       // Return simplified test information (id, name, description, question count)
@@ -32,7 +36,7 @@ router.get(
 router.get(
   "/",
   authenticateJWT,
-  authorizeUserType("hrManager") || authorizeUserType("hr"),
+  authorizeUserTypes(["hrManager", "candidate"]),
   async (req, res) => {
     console.log("Getting all hiring tests");
 
@@ -355,7 +359,7 @@ router.post(
 router.post(
   "/",
   authenticateJWT,
-  authorizeUserType("hrManager") || authorizeUserType("hr"),
+  authorizeUserTypes(["hrManager", "candidate"]),
   async (req, res) => {
     console.log("Creating hiring test");
     const hrm = await HRManager.findOne({
@@ -434,7 +438,7 @@ router.post(
 router.put(
   "/:id",
   authenticateJWT,
-  authorizeUserType("hrManager") || authorizeUserType("hr"),
+  authorizeUserTypes(["hrManager", "candidate"]),
   async (req, res) => {
     try {
       const [updated] = await HiringTest.update(req.body, {
@@ -459,7 +463,7 @@ router.put(
 router.delete(
   "/:id",
   authenticateJWT,
-  authorizeUserType("hrManager") || authorizeUserType("hr"),
+  authorizeUserTypes(["hrManager", "candidate"]),
   async (req, res) => {
     try {
       const deleted = await HiringTest.destroy({

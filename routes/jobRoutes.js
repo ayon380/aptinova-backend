@@ -5,14 +5,14 @@ const Job = require("../models/job");
 const Organization = require("../models/organization");
 const Applicant = require("../models/applicant");
 // Assuming you have a separate Application model, if not, use just Applicant
-const { authenticateJWT, authorizeUserType } = require("../middleware/auth");
+const { authenticateJWT, authorizeUserType,authorizeUserTypes } = require("../middleware/auth");
 const { Op } = require("sequelize");
 
 // Get all jobs (HR or HRManager only)
 router.get(
   "/",
   authenticateJWT,
-  authorizeUserType("hrManager") || authorizeUserType("hr"),
+  authorizeUserTypes(["hrManager", "candidate"]),
   async (req, res) => {
     try {
       const hro = await HRManager.findByPk(req.user.id);
@@ -411,6 +411,10 @@ router.post(
       }
 
       const applicant = await Applicant.create(applicantData);
+
+      fetch("/pyton/scoring")
+
+      
       res.status(201).json(applicant);
     } catch (error) {
       res.status(400).json({ error: error.message });

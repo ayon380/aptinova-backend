@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Applicant = require("../models/applicant");
 const HRManager = require("../models/hrManager");
-const { authenticateJWT, authorizeUserType } = require("../middleware/auth");
+const { authenticateJWT, authorizeUserType,authorizeUserTypes } = require("../middleware/auth");
 const { sendEmail } = require("../utils/emailService");
 const createTestInvitationEmail = require("../utils/emailTemplates/testInvitation");
 const Job = require("../models/job");
@@ -12,7 +12,7 @@ const Candidate = require("../models/candidate");
 router.get(
   "/byjob/:jobId",
   authenticateJWT,
-  authorizeUserType("hrManager") || authorizeUserType("hr"),
+  authorizeUserTypes(["hrManager", "candidate"]),
   async (req, res) => {
     console.log("Getting applications for JobID " + req.params.jobId);
 
@@ -96,7 +96,7 @@ router.get(
 router.get(
   "/:id/profile",
   authenticateJWT,
-  authorizeUserType("hrManager") || authorizeUserType("hr"),
+  authorizeUserTypes(["hrManager", "candidate"]),
   async (req, res) => {
     try {
       const applicant = await Applicant.findByPk(req.params.id, {
@@ -126,7 +126,7 @@ router.get(
 router.post(
   "/",
   authenticateJWT,
-  authorizeUserType("hrManager") || authorizeUserType("hr"),
+  authorizeUserTypes(["hrManager", "candidate"]),
   async (req, res) => {
     try {
       const applicant = await Applicant.create({
@@ -144,7 +144,7 @@ router.post(
 router.put(
   "/:id",
   authenticateJWT,
-  authorizeUserType("hrManager") || authorizeUserType("hr"),
+  authorizeUserTypes(["hrManager", "candidate"]),
   async (req, res) => {
     try {
       const hrm = await HRManager.findOne({
@@ -237,7 +237,7 @@ router.put(
 router.put(
   "/:id/status",
   authenticateJWT,
-  authorizeUserType("hrManager") || authorizeUserType("hr"),
+  authorizeUserTypes(["hrManager", "candidate"]),
   async (req, res) => {
     try {
       const { status } = req.body;
@@ -286,7 +286,7 @@ router.put(
 router.delete(
   "/:id",
   authenticateJWT,
-  authorizeUserType("hrManager") || authorizeUserType("hr"),
+  authorizeUserTypes(["hrManager", "candidate"]),
   async (req, res) => {
     try {
       const deleted = await Applicant.destroy({
