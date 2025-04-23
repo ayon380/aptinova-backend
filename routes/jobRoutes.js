@@ -5,7 +5,11 @@ const Job = require("../models/job");
 const Organization = require("../models/organization");
 const Applicant = require("../models/applicant");
 // Assuming you have a separate Application model, if not, use just Applicant
-const { authenticateJWT, authorizeUserType,authorizeUserTypes } = require("../middleware/auth");
+const {
+  authenticateJWT,
+  authorizeUserType,
+  authorizeUserTypes,
+} = require("../middleware/auth");
 const { Op } = require("sequelize");
 
 // Get all jobs (HR or HRManager only)
@@ -98,7 +102,7 @@ router.get(
 );
 
 // Make the /all route optionally authenticated to filter out applied jobs
-router.get("/all", authenticateJWT, async (req, res) => {
+router.get("/all",authenticateJWT, authorizeUserType("candidate"),async (req, res) => {
   try {
     // Extract query parameters
     const page = parseInt(req.query.page) || 1;
@@ -371,7 +375,7 @@ router.post(
       // Initialize applicant data
       const applicantData = {
         jobId: req.params.id,
-        score : Math.floor(Math.random() * 100), // Random score for demo purposes
+        score: Math.floor(Math.random() * 100), // Random score for demo purposes
         orgId: job.organizationId,
         candidateId: req.user.id,
         ...req.body,
@@ -412,9 +416,8 @@ router.post(
 
       const applicant = await Applicant.create(applicantData);
 
-      fetch("/pyton/scoring")
+      fetch("/pyton/scoring");
 
-      
       res.status(201).json(applicant);
     } catch (error) {
       res.status(400).json({ error: error.message });
