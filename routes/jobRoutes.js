@@ -121,18 +121,20 @@ router.get("/all",authenticateJWT, authorizeUserType("candidate"),async (req, re
     let excludeJobIds = [];
 
     // If the request has authentication token and it's a candidate
-    console.log(req.user);
+    console.log(req.user.id);
 
-    if (req.user && req.user.type === "candidate") {
+    if (req.user ) {
       // Find all job IDs the candidate has already applied to
       const applications = await Applicant.findAll({
         where: { candidateId: req.user.id },
         attributes: ["jobId"],
       });
-
+      console.log("Applications:", applications);
+      
       // Extract job IDs to exclude
       excludeJobIds = applications.map((app) => app.jobId);
-
+      console.log("Exclude job IDs:", excludeJobIds);
+      
       // If there are jobs to exclude, add them to the query
       if (excludeJobIds.length > 0) {
         queryOptions.where.id = {
@@ -416,7 +418,7 @@ router.post(
 
       const applicant = await Applicant.create(applicantData);
 
-      fetch("/pyton/scoring");
+      // fetch("/pyton/scoring");
 
       res.status(201).json(applicant);
     } catch (error) {
