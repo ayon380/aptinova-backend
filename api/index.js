@@ -85,6 +85,18 @@ app.use("/interviews", interviewRoutes);
 const codeExecutionRoutes = require("../routes/codeExecutionRoutes");
 app.use("/code", codeExecutionRoutes);
 
+const traitsRoutes = require("../routes/traitsRoutes");
+app.use("/traits", traitsRoutes);
+
+const hrRequestRoutes = require("../routes/hrRequestRoutes");
+app.use("/hrrequest", hrRequestRoutes);
+
+const validateSubjectiveRoutes = require("../routes/validateSubjectiveRoutes");
+app.use("/validate-subjective", validateSubjectiveRoutes);
+
+const parserRoutes = require("../routes/parserRoutes");
+app.use("/parser", parserRoutes);
+
 const teamRoutes = require("../routes/teamsRoutes");
 app.use("/teams", teamRoutes);
 sequelize.sync().then(() => {
