@@ -247,9 +247,6 @@ const sendInterviewEmail = async (
   return await sendEmail(to, subject, html);
 };
 
-/**
- * Send interview invitation email to interviewers
- */
 const sendInterviewerEmail = async (
   to,
   interviewerName,
@@ -407,9 +404,108 @@ const sendInterviewerEmail = async (
   return await sendEmail(to, subject, html);
 };
 
+// Updated function to send Offer Email including logo
+const sendOfferEmail = async (
+  to,
+  candidateName,
+  jobTitle,
+  organizationName,
+  organizationLogoUrl, // Added parameter for logo URL
+  offerDetails
+) => {
+  const subject = `🎉 Congratulations! You've Received an Offer from ${organizationName} for ${jobTitle}!`;
+
+  // Basic formatting for offer details - adjust as needed based on offerDetails structure
+  let detailsHtml = "";
+  if (offerDetails && typeof offerDetails === "object") {
+    detailsHtml = Object.entries(offerDetails)
+      .map(([key, value]) => {
+        // Simple formatting: Capitalize key, handle potential objects/arrays in value
+        const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+        const formattedValue = typeof value === 'object' ? JSON.stringify(value) : value;
+        return `<p><strong>${formattedKey}:</strong> ${formattedValue}</p>`;
+      })
+      .join("");
+  } else {
+    detailsHtml = "<p>Please contact us for the specific terms of your offer.</p>";
+  }
+
+
+  // Add logo HTML conditionally
+  const logoHtml = organizationLogoUrl
+    ? `<img src="${organizationLogoUrl}" alt="${organizationName} Logo" style="max-height: 70px; max-width: 200px; margin-bottom: 20px; display: block; margin-left: auto; margin-right: auto;">`
+    : ''; // Empty string if no logo URL
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        .email-container { max-width: 650px; margin: 20px auto; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; border: 1px solid #ddd; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%); color: white; padding: 40px; text-align: center; }
+        .header h1 { margin: 0; font-size: 28px; font-weight: 600; }
+        .header p { margin: 10px 0 0; font-size: 18px; }
+        .content { padding: 30px 40px; background: #fff; }
+        .content h2 { color: #764BA2; font-size: 22px; margin-bottom: 15px; }
+        .content p { margin-bottom: 15px; font-size: 16px; }
+        .offer-details { background: #f8f9fa; border-left: 5px solid #667EEA; margin: 25px 0; padding: 20px; border-radius: 5px; }
+        .offer-details h3 { margin-top: 0; color: #667EEA; font-size: 20px; }
+        .offer-details p { margin-bottom: 10px; font-size: 15px; }
+        .offer-details strong { color: #555; }
+        .cta-button { display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%); color: white !important; text-decoration: none; border-radius: 30px; font-weight: bold; margin: 25px 0; text-align: center; font-size: 17px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); transition: transform 0.2s ease; }
+        .cta-button:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
+        .footer { background: #f1f1f1; padding: 20px 40px; text-align: center; font-size: 13px; color: #777; }
+        .footer a { color: #764BA2; text-decoration: none; }
+      </style>
+    </head>
+    <body>
+      <div class="email-container">
+        <div class="header">
+          <!-- Logo can go here or in the content section -->
+          <h1>Congratulations, ${candidateName}!</h1>
+          <p>Your Hard Work Has Paid Off!</p>
+        </div>  
+        <div class="content">
+          ${logoHtml} <!-- Include logo HTML here -->
+          <h2>An Exciting Offer Awaits You!</h2>
+          <p>Dear ${candidateName},</p>
+          <p>Following our recent interactions and your successful completion of our evaluation process, we are absolutely thrilled to extend an official offer of employment to you for the position of <strong>${jobTitle}</strong> at <strong>${organizationName}</strong>!</p>
+          <p>We were incredibly impressed with your skills, experience, and enthusiasm throughout the hiring process. We believe you possess the qualities that align perfectly with our team's values and the requirements of this role. Your potential contribution to ${organizationName} is something we are genuinely excited about.</p>
+
+          <div class="offer-details">
+            <h3>Offer Highlights</h3>
+            ${detailsHtml}
+            <p><em>A detailed offer letter with comprehensive terms and conditions will follow shortly. Please review it carefully.</em></p>
+          </div>
+
+          <h2>Next Steps</h2>
+          <p>We understand this is a significant decision. Please take the time you need to review the offer. We kindly request your response by [Offer Expiry Date - Consider adding this to offerDetails or as a separate param].</p>
+          <p>If you have any questions or wish to discuss any aspect of this offer, please do not hesitate to contact [HR Contact Person/Email/Phone - Consider adding this].</p>
+
+      
+
+          <p>We are confident that you will find ${organizationName} a rewarding place to grow your career and make a real impact. We eagerly anticipate the possibility of you joining our team and contributing to our shared success.</p>
+          <p>Congratulations once again on reaching this milestone!</p>
+          <p>Warmest regards,</p>
+          <p><strong>The Hiring Team at ${organizationName}</strong></p>
+        </div>
+        <div class="footer">
+          <p>&copy; ${new Date().getFullYear()} ${organizationName}. All rights reserved.</p>
+          <p>If you believe you received this email in error, please contact us at <a href="mailto:support@aptinova.com">support@aptinova.com</a>.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return await sendEmail(to, subject, html);
+};
+
+
 module.exports = {
   sendEmail,
   sendOnboardingEmail,
   sendInterviewEmail,
   sendInterviewerEmail,
+  sendOfferEmail, // Export the updated function
 };

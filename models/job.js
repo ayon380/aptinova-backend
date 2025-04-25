@@ -1,6 +1,8 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
 const Organization = require("./organization");
+const { text } = require("express");
+const HR = require("./hr");
 //v0.29
 const Job = sequelize.define(
   "Job",
@@ -13,6 +15,15 @@ const Job = sequelize.define(
     orgLogo: {
       type: DataTypes.STRING,
     },
+    hrId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: HR,
+        key: "id",
+      },
+    },
+
     OrgName: {
       type: DataTypes.STRING,
       allowNull: true,
@@ -336,5 +347,8 @@ Job.belongsTo(Organization, {
   foreignKey: "organizationId",
   as: "organization",
 });
-
+Job.belongsTo(HR, {
+  foreignKey: "hrId",
+  as: "hr",
+});
 module.exports = Job;

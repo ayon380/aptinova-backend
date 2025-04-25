@@ -123,6 +123,7 @@ router.post(
 
       // Record the start time
       applicant.startTime = new Date();
+      applicant.warnings = []; // Reset warnings when starting the test
       await applicant.save();
 
       // Create a copy of the test questions to modify

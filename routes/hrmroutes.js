@@ -6,6 +6,7 @@ const { Op } = require("sequelize");
 const sequelize = require("../config/database");
 const Job = require("../models/job");
 const Applicant = require("../models/applicant");
+const db = require("../config/database");
 const Interview = require("../models/interview");
 const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
@@ -369,6 +370,8 @@ router.get(
 );
 
 // Analytics endpoint for HR Manager
+
+
 router.get(
   "/analytics",
   authenticateJWT,
@@ -376,72 +379,74 @@ router.get(
   async (req, res) => {
     try {
       const { organizationId } = req.user;
+      console.log(organizationId);
 
-      // Time periods for historical analysis
+      // --- Time periods (No change) ---
       const currentDate = new Date();
       const oneMonthAgo = new Date(currentDate);
       oneMonthAgo.setMonth(currentDate.getMonth() - 1);
       const twoMonthsAgo = new Date(currentDate);
       twoMonthsAgo.setMonth(currentDate.getMonth() - 2);
+      // Assuming threeMonthsAgo was potentially for future use, keeping it for consistency
       const threeMonthsAgo = new Date(currentDate);
       threeMonthsAgo.setMonth(currentDate.getMonth() - 3);
 
-      // Get job performance data with application rate
-      const jobs = await Job.findAll({
-        where: { organizationId },
-        attributes: [
-          "id",
-          "title",
-          "postedAt",
-          [
-            sequelize.fn("COUNT", sequelize.col("Applicants.id")),
-            "applicantCount",
-          ],
-        ],
-        include: [
-          {
-            model: Applicant,
-            attributes: [],
-          },
-        ],
-        group: ["Job.id"],
-        limit: 15,
-        order: [[sequelize.literal("applicantCount"), "DESC"]],
-      });
+      // --- Get job performance data ---
+      const jobsSql = `
+        SELECT
+            j.id,
+            j.title,
+            j.posted_at AS "postedAt",
+            COUNT(a.id) AS "applicantCount"
+        FROM
+            jobs j
+        LEFT JOIN
+            applicants a ON j.id = a.job_id
+        WHERE
+            j.organization_id = $1
+        GROUP BY
+            j.id, j.title, j.posted_at
+        ORDER BY
+            "applicantCount" DESC
+        LIMIT 15;
+      `;
+      const jobsResult = await db.query(jobsSql, [organizationId]);
+      const jobsData = jobsResult.rows; // Extract rows from DB result
 
-      // Calculate applications per day for each job
+      // --- Calculate applications per day and shortlist conversion rate ---
       const jobPerformance = await Promise.all(
-        jobs.map(async (job) => {
+        jobsData.map(async (job) => {
           const daysActive = Math.max(
             1,
             Math.ceil(
               (new Date() - new Date(job.postedAt)) / (1000 * 60 * 60 * 24)
             )
           );
+          // Note: job.applicantCount from the SQL query is likely a string, parse it.
+          const applicantCountInt = parseInt(job.applicantCount, 10);
           const applicationsPerDay = (
-            parseInt(job.dataValues.applicantCount) / daysActive
+            applicantCountInt / daysActive
           ).toFixed(2);
 
-          // Get shortlist conversion rate
-          const shortlistedCount = await Applicant.count({
-            where: {
-              jobId: job.id,
-              status: "Shortlisted",
-            },
-          });
+          // Get shortlist conversion rate for this specific job
+          const shortlistedSql = `
+            SELECT COUNT(*) AS "shortlistedCount"
+            FROM applicants
+            WHERE job_id = $1 AND status = 'Shortlisted';
+          `;
+          const shortlistedResult = await db.query(shortlistedSql, [job.id]);
+          // COUNT(*) returns one row with the count, possibly as a string
+          const shortlistedCount = parseInt(shortlistedResult.rows[0].shortlistedCount, 10);
 
           const conversionRate =
-            parseInt(job.dataValues.applicantCount) > 0
-              ? (
-                  (shortlistedCount / parseInt(job.dataValues.applicantCount)) *
-                  100
-                ).toFixed(1)
-              : 0;
+            applicantCountInt > 0
+              ? ((shortlistedCount / applicantCountInt) * 100).toFixed(1)
+              : "0.0"; // Keep consistent type (string)
 
           return {
             id: job.id,
             title: job.title,
-            applicantCount: parseInt(job.dataValues.applicantCount),
+            applicantCount: applicantCountInt,
             daysActive,
             applicationsPerDay,
             shortlistedCount,
@@ -450,183 +455,172 @@ router.get(
         })
       );
 
-      // Get hiring funnel data with period comparison
-      const currentFunnel = await Applicant.findAll({
-        where: {
-          orgId: organizationId,
-          createdAt: { [Op.gte]: oneMonthAgo },
-        },
-        attributes: [
-          "status",
-          [sequelize.fn("COUNT", sequelize.col("id")), "count"],
-        ],
-        group: ["status"],
-      });
+      // --- Get hiring funnel data ---
+      const currentFunnelSql = `
+        SELECT
+            status,
+            COUNT(id)::INTEGER AS count -- Cast count to integer
+        FROM
+            applicants
+        WHERE
+            org_id = $1 AND created_at >= $2
+        GROUP BY
+            status;
+      `;
+      const currentFunnelResult = await db.query(currentFunnelSql, [organizationId, oneMonthAgo]);
+      const currentFunnel = currentFunnelResult.rows;
 
-      const previousFunnel = await Applicant.findAll({
-        where: {
-          orgId: organizationId,
-          createdAt: { [Op.between]: [twoMonthsAgo, oneMonthAgo] },
-        },
-        attributes: [
-          "status",
-          [sequelize.fn("COUNT", sequelize.col("id")), "count"],
-        ],
-        group: ["status"],
-      });
+      const previousFunnelSql = `
+        SELECT
+            status,
+            COUNT(id)::INTEGER AS count -- Cast count to integer
+        FROM
+            applicants
+        WHERE
+            org_id = $1 AND created_at BETWEEN $2 AND $3
+        GROUP BY
+            status;
+      `;
+      // Note: The original used Op.between which is inclusive. SQL BETWEEN is also inclusive.
+      const previousFunnelResult = await db.query(previousFunnelSql, [organizationId, twoMonthsAgo, oneMonthAgo]);
+      const previousFunnel = previousFunnelResult.rows;
 
-      // Convert to comparable format and calculate percentage changes
+      // --- Process hiring funnel data (No change in logic, just input variable names) ---
       const hiringFunnel = [];
       const statusMap = new Map();
 
       currentFunnel.forEach((item) => {
-        statusMap.set(item.dataValues.status, {
-          current: parseInt(item.dataValues.count),
+        statusMap.set(item.status, {
+          // count is already integer from SQL casting
+          current: item.count,
           previous: 0,
         });
       });
 
       previousFunnel.forEach((item) => {
-        if (statusMap.has(item.dataValues.status)) {
-          statusMap.get(item.dataValues.status).previous = parseInt(
-            item.dataValues.count
-          );
+        if (statusMap.has(item.status)) {
+          // count is already integer from SQL casting
+          statusMap.get(item.status).previous = item.count;
         } else {
-          statusMap.set(item.dataValues.status, {
+          statusMap.set(item.status, {
             current: 0,
-            previous: parseInt(item.dataValues.count),
+             // count is already integer from SQL casting
+            previous: item.count,
           });
         }
       });
 
-      statusMap.forEach((data, status) => {
-        const percentChange =
-          data.previous > 0
-            ? (((data.current - data.previous) / data.previous) * 100).toFixed(
-                1
-              )
-            : data.current > 0
-            ? "100"
-            : "0";
+       statusMap.forEach((data, status) => {
+         const percentChange =
+           data.previous > 0
+             ? (((data.current - data.previous) / data.previous) * 100).toFixed(1)
+             : data.current > 0
+             ? "100.0" // Maintain decimal for consistency if desired
+             : "0.0"; // Maintain decimal
 
-        hiringFunnel.push({
-          status,
-          current: data.current,
-          previous: data.previous,
-          percentChange: `${percentChange}%`,
-          trend:
-            percentChange > 0 ? "up" : percentChange < 0 ? "down" : "stable",
-        });
-      });
+         const trend =
+           parseFloat(percentChange) > 0
+             ? "up"
+             : parseFloat(percentChange) < 0
+             ? "down"
+             : "stable";
 
-      // Get source effectiveness analytics
-      const sourcesData = await Candidate.findAll({
-        include: [
-          {
-            model: Applicant,
-            required: true,
-            where: { orgId: organizationId },
-          },
-        ],
-        attributes: [
-          "source",
-          [
-            sequelize.fn("COUNT", sequelize.col("Applicants.id")),
-            "applicantCount",
-          ],
-          [
-            sequelize.fn(
-              "COUNT",
-              sequelize.literal(
-                `CASE WHEN "Applicants"."status" = 'Hired' THEN 1 ELSE NULL END`
-              )
-            ),
-            "hiredCount",
-          ],
-        ],
-        group: ["source"],
-      });
+         hiringFunnel.push({
+           status,
+           current: data.current,
+           previous: data.previous,
+           percentChange: `${percentChange}%`,
+           trend,
+         });
+       });
 
+
+      // --- Get source effectiveness analytics ---
+      const sourcesSql = `
+        SELECT
+            COALESCE(c.source, 'Unknown') AS source, -- Handle potential NULL source
+            COUNT(a.id)::INTEGER AS "applicantCount",
+            COUNT(CASE WHEN a.status = 'Hired' THEN 1 ELSE NULL END)::INTEGER AS "hiredCount"
+        FROM
+            candidates c
+        JOIN -- Sequelize 'required: true' maps to INNER JOIN
+            applicants a ON c.id = a.candidate_id
+        WHERE
+            a.org_id = $1
+        GROUP BY
+            COALESCE(c.source, 'Unknown'); -- Group by the potentially coalesced value
+      `;
+      const sourcesResult = await db.query(sourcesSql, [organizationId]);
+      const sourcesData = sourcesResult.rows;
+
+      // --- Process source analytics (No change in logic) ---
       const sourcesAnalytics = sourcesData.map((source) => {
-        const applicantCount = parseInt(source.dataValues.applicantCount);
-        const hiredCount = parseInt(source.dataValues.hiredCount);
+        // Counts are already integers from SQL casting
+        const applicantCount = source.applicantCount;
+        const hiredCount = source.hiredCount;
         const conversionRate =
           applicantCount > 0
             ? ((hiredCount / applicantCount) * 100).toFixed(1)
-            : 0;
+            : "0.0"; // Keep type consistent
 
         return {
-          source: source.source || "Unknown",
+          source: source.source, // Already handled NULL in SQL
           applicantCount,
           hiredCount,
           conversionRate: `${conversionRate}%`,
         };
       });
 
-      // Get test completion rates with trend data
-      const currentTestData = await Applicant.findAll({
-        where: {
-          orgId: organizationId,
-          hiringTestId: { [Op.not]: null },
-          createdAt: { [Op.gte]: oneMonthAgo },
-        },
-        attributes: [
-          [
-            sequelize.literal(
-              `CASE WHEN "score" IS NOT NULL THEN 'Completed' ELSE 'Pending' END`
-            ),
-            "status",
-          ],
-          [sequelize.fn("COUNT", sequelize.col("id")), "count"],
-        ],
-        group: [
-          sequelize.literal(
-            `CASE WHEN "score" IS NOT NULL THEN 'Completed' ELSE 'Pending' END`
-          ),
-        ],
-      });
+      // --- Get test completion rates ---
+      const currentTestSql = `
+        SELECT
+            CASE WHEN score IS NOT NULL THEN 'Completed' ELSE 'Pending' END AS status,
+            COUNT(id)::INTEGER AS count
+        FROM
+            applicants
+        WHERE
+            org_id = $1
+            AND hiring_test_id IS NOT NULL
+            AND created_at >= $2
+        GROUP BY
+            CASE WHEN score IS NOT NULL THEN 'Completed' ELSE 'Pending' END;
+      `;
+      const currentTestResult = await db.query(currentTestSql, [organizationId, oneMonthAgo]);
+      const currentTestData = currentTestResult.rows;
 
-      const previousTestData = await Applicant.findAll({
-        where: {
-          orgId: organizationId,
-          hiringTestId: { [Op.not]: null },
-          createdAt: { [Op.between]: [twoMonthsAgo, oneMonthAgo] },
-        },
-        attributes: [
-          [
-            sequelize.literal(
-              `CASE WHEN "score" IS NOT NULL THEN 'Completed' ELSE 'Pending' END`
-            ),
-            "status",
-          ],
-          [sequelize.fn("COUNT", sequelize.col("id")), "count"],
-        ],
-        group: [
-          sequelize.literal(
-            `CASE WHEN "score" IS NOT NULL THEN 'Completed' ELSE 'Pending' END`
-          ),
-        ],
-      });
+      const previousTestSql = `
+         SELECT
+             CASE WHEN score IS NOT NULL THEN 'Completed' ELSE 'Pending' END AS status,
+             COUNT(id)::INTEGER AS count
+         FROM
+             applicants
+         WHERE
+             org_id = $1
+             AND hiring_test_id IS NOT NULL
+             AND created_at BETWEEN $2 AND $3 -- Using BETWEEN to match Sequelize Op.between
+         GROUP BY
+             CASE WHEN score IS NOT NULL THEN 'Completed' ELSE 'Pending' END;
+      `;
+      const previousTestResult = await db.query(previousTestSql, [organizationId, twoMonthsAgo, oneMonthAgo]);
+      const previousTestData = previousTestResult.rows;
 
-      // Process test completion data
+      // --- Process test completion data (No change in logic) ---
       const testCompletionMap = new Map();
 
       currentTestData.forEach((item) => {
-        testCompletionMap.set(item.dataValues.status, {
-          current: parseInt(item.dataValues.count),
+        testCompletionMap.set(item.status, {
+          current: item.count, // Already integer
           previous: 0,
         });
       });
 
       previousTestData.forEach((item) => {
-        if (testCompletionMap.has(item.dataValues.status)) {
-          testCompletionMap.get(item.dataValues.status).previous = parseInt(
-            item.dataValues.count
-          );
+        if (testCompletionMap.has(item.status)) {
+          testCompletionMap.get(item.status).previous = item.count; // Already integer
         } else {
-          testCompletionMap.set(item.dataValues.status, {
+          testCompletionMap.set(item.status, {
             current: 0,
-            previous: parseInt(item.dataValues.count),
+            previous: item.count, // Already integer
           });
         }
       });
@@ -635,90 +629,84 @@ router.get(
       testCompletionMap.forEach((data, status) => {
         const percentChange =
           data.previous > 0
-            ? (((data.current - data.previous) / data.previous) * 100).toFixed(
-                1
-              )
+            ? (((data.current - data.previous) / data.previous) * 100).toFixed(1)
             : data.current > 0
-            ? "100"
-            : "0";
+            ? "100.0"
+            : "0.0";
+        const trend =
+          parseFloat(percentChange) > 0
+             ? "up"
+             : parseFloat(percentChange) < 0
+             ? "down"
+             : "stable";
 
         testCompletionRates.push({
           status,
           current: data.current,
           previous: data.previous,
           percentChange: `${percentChange}%`,
-          trend:
-            percentChange > 0 ? "up" : percentChange < 0 ? "down" : "stable",
+          trend,
         });
       });
 
-      // Time to hire by job type
-      const timeToHireByType = await Job.findAll({
-        include: [
-          {
-            model: Applicant,
-            required: true,
-            where: {
-              orgId: organizationId,
-              status: "Hired",
-            },
-            attributes: [],
-          },
-        ],
-        attributes: [
-          "employmentType",
-          [
-            sequelize.fn(
-              "AVG",
-              sequelize.literal(
-                'EXTRACT(EPOCH FROM ("Applicants"."updated_at" - "Applicants"."created_at")) / 86400'
-              )
-            ),
-            "avgDaysToHire",
-          ],
-          [sequelize.fn("COUNT", sequelize.col("Applicants.id")), "hiredCount"],
-        ],
-        group: ["employmentType"],
-      });
+      // --- Time to hire by job type ---
+      const timeToHireSql = `
+        SELECT
+            j.employment_type AS "employmentType",
+            -- Calculate average in days. Use 86400.0 for float division.
+            AVG(EXTRACT(EPOCH FROM (a.updated_at - a.created_at)) / 86400.0) AS "avgDaysToHire",
+            COUNT(a.id)::INTEGER AS "hiredCount"
+        FROM
+            jobs j
+        JOIN -- Sequelize 'required: true' maps to INNER JOIN
+            applicants a ON j.id = a.job_id
+        WHERE
+            a.org_id = $1 AND a.status = 'Hired'
+        GROUP BY
+            j.employment_type;
+      `;
+      const timeToHireResult = await db.query(timeToHireSql, [organizationId]);
+      const timeToHireByTypeData = timeToHireResult.rows;
 
-      // Get monthly application volume for trend analysis
+       // Process Time to Hire Data (minor adjustments for direct SQL results)
+       const timeToHireByJobType = timeToHireByTypeData.map((item) => ({
+         employmentType: item.employmentType,
+         // avgDaysToHire might be null if no hires for a type, handle it
+         avgDaysToHire: item.avgDaysToHire ? parseFloat(item.avgDaysToHire).toFixed(1) : "0.0",
+         hiredCount: item.hiredCount, // Already integer
+       }));
+
+
+      // --- Get monthly application volume for trend analysis ---
       const last6Months = Array.from({ length: 6 }, (_, i) => {
         const date = new Date();
         date.setMonth(date.getMonth() - i);
-        return date;
+        const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+        const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999); // Ensure end of day
+        return { startOfMonth, endOfMonth };
       });
 
       const monthlyTrends = await Promise.all(
-        last6Months.map(async (monthDate) => {
-          const startOfMonth = new Date(
-            monthDate.getFullYear(),
-            monthDate.getMonth(),
-            1
-          );
-          const endOfMonth = new Date(
-            monthDate.getFullYear(),
-            monthDate.getMonth() + 1,
-            0
-          );
+        last6Months.map(async ({ startOfMonth, endOfMonth }) => {
+          const applicantCountSql = `
+            SELECT COUNT(*)::INTEGER AS count
+            FROM applicants
+            WHERE org_id = $1 AND created_at BETWEEN $2 AND $3;
+          `;
+          const hiredCountSql = `
+            SELECT COUNT(*)::INTEGER AS count
+            FROM applicants
+            WHERE org_id = $1 AND status = 'Hired' AND updated_at BETWEEN $2 AND $3;
+            -- Using updated_at for hired date as in original logic
+          `;
 
-          const applicantCount = await Applicant.count({
-            where: {
-              orgId: organizationId,
-              createdAt: {
-                [Op.between]: [startOfMonth, endOfMonth],
-              },
-            },
-          });
+          const [applicantResult, hiredResult] = await Promise.all([
+              db.query(applicantCountSql, [organizationId, startOfMonth, endOfMonth]),
+              db.query(hiredCountSql, [organizationId, startOfMonth, endOfMonth])
+          ]);
 
-          const hiredCount = await Applicant.count({
-            where: {
-              orgId: organizationId,
-              status: "Hired",
-              updatedAt: {
-                [Op.between]: [startOfMonth, endOfMonth],
-              },
-            },
-          });
+          const applicantCount = applicantResult.rows[0].count;
+          const hiredCount = hiredResult.rows[0].count;
 
           return {
             month: startOfMonth.toLocaleString("default", { month: "long" }),
@@ -728,28 +716,26 @@ router.get(
             hireRate:
               applicantCount > 0
                 ? ((hiredCount / applicantCount) * 100).toFixed(1) + "%"
-                : "0%",
+                : "0.0%", // Consistent format
           };
         })
       );
 
+      // --- Send Response (Structure remains the same) ---
       res.json({
         jobPerformance,
         hiringFunnel,
         testCompletionRates,
         sourceEffectiveness: sourcesAnalytics,
-        timeToHireByJobType: timeToHireByType.map((item) => ({
-          employmentType: item.employmentType,
-          avgDaysToHire: parseFloat(item.dataValues.avgDaysToHire).toFixed(1),
-          hiredCount: parseInt(item.dataValues.hiredCount),
-        })),
-        monthlyTrends: monthlyTrends.reverse(),
+        timeToHireByJobType, // Use the processed array
+        monthlyTrends: monthlyTrends.reverse(), // Reverse remains the same
       });
+
     } catch (error) {
       console.error("Analytics error:", error);
       res.status(500).json({
         error: "Failed to fetch analytics data",
-        details: error.message,
+        details: error.message, // Provide error details
       });
     }
   }
