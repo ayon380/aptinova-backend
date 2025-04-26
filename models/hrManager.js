@@ -11,6 +11,10 @@ HRManager.init(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
+    type: {
+      type: DataTypes.TEXT,
+      defaultValue: "hrm",
+    },
     subscriptionId: {
       type: DataTypes.STRING,
     },

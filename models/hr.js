@@ -7,6 +7,10 @@ const HR = sequelize.define("HR", {
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true,
   },
+  type: {
+    type: DataTypes.TEXT,
+    defaultValue: "hr",
+  },
   email: {
     type: DataTypes.STRING,
     unique: true,

@@ -9,7 +9,6 @@ const dotenv = require('dotenv'); // For loading environment variables
 const os = require('os'); // To get temporary directory
 const crypto = require('crypto'); // For generating unique temp filenames
 
-dotenv.config(); // Load .env file variables into process.env
 
 // --- Configuration ---
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;

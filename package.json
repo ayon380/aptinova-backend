@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@google/generative-ai": "^0.24.0",
     "@passwordless-id/webauthn": "^2.3.0",
     "@simplewebauthn/server": "^13.1.1",
     "aptinova-backend": "file:",
@@ -29,6 +30,7 @@
     "express-session": "^1.18.1",
     "googleapis": "^146.0.0",
     "jsonwebtoken": "^9.0.2",
+    "mammoth": "^1.9.0",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.10.0",
     "nodemon": "^3.1.9",
@@ -37,6 +39,7 @@
     "passport-linkedin-oauth2": "^2.0.0",
     "passport-local": "^1.0.0",
     "passport-microsoft": "^2.1.0",
+    "pdf-parse": "^1.1.1",
     "pg": "^8.13.2",
     "pyodide": "^0.27.3",
     "python-shell": "^5.0.0",

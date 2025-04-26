@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const HRManager = require("../models/hrManager");
 const Job = require("../models/job");
+const HR = require("../models/hr"); // Add HR model import
 const Organization = require("../models/organization");
 const Applicant = require("../models/applicant");
 // Assuming you have a separate Application model, if not, use just Applicant
@@ -11,19 +12,34 @@ const {
   authorizeUserTypes,
 } = require("../middleware/auth");
 const { Op } = require("sequelize");
+const { auth } = require("googleapis/build/src/apis/abusiveexperiencereport");
 
 // Get all jobs (HR or HRManager only)
 router.get(
   "/",
   authenticateJWT,
-  authorizeUserTypes(["hrManager", "candidate"]),
+  authorizeUserTypes(["hrManager", "hr"]),
   async (req, res) => {
     try {
-      const hro = await HRManager.findByPk(req.user.id);
-      const jobs = await Job.findAll({
-        where: { organizationId: hro.organizationId },
-      });
+      let jobs = [];
+      console.log(req.user);
+      
+      if (req.user.type === "hr") {
+        console.log("HR user detected");
 
+        const hr = await HR.findByPk(req.user.id);
+        jobs = await Job.findAll({
+          where: { hrId: hr.id, organizationId: hr.organizationId },
+        });
+        return res.json(jobs);
+      } else {
+        console.log("HRManager user detected");
+
+        const hro = await HRManager.findByPk(req.user.id);
+        jobs = await Job.findAll({
+          where: { organizationId: hro.organizationId },
+        });
+      }
       res.json(jobs);
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -102,153 +118,158 @@ router.get(
 );
 
 // Make the /all route optionally authenticated to filter out applied jobs
-router.get("/all",authenticateJWT, authorizeUserType("candidate"),async (req, res) => {
-  try {
-    // Extract query parameters
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const offset = (page - 1) * limit;
-    const sort = req.query.sort || "postedAt,desc";
+router.get(
+  "/all",
+  authenticateJWT,
+  authorizeUserType("candidate"),
+  async (req, res) => {
+    try {
+      // Extract query parameters
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const offset = (page - 1) * limit;
+      const sort = req.query.sort || "postedAt,desc";
 
-    // Build base query
-    const queryOptions = {
-      where: {},
-      limit,
-      offset,
-    };
+      // Build base query
+      const queryOptions = {
+        where: {},
+        limit,
+        offset,
+      };
 
-    // First check if we have an authenticated candidate
-    let excludeJobIds = [];
+      // First check if we have an authenticated candidate
+      let excludeJobIds = [];
 
-    // If the request has authentication token and it's a candidate
-    console.log(req.user.id);
+      // If the request has authentication token and it's a candidate
+      console.log(req.user.id);
 
-    if (req.user ) {
-      // Find all job IDs the candidate has already applied to
-      const applications = await Applicant.findAll({
-        where: { candidateId: req.user.id },
-        attributes: ["jobId"],
-      });
-      console.log("Applications:", applications);
-      
-      // Extract job IDs to exclude
-      excludeJobIds = applications.map((app) => app.jobId);
-      console.log("Exclude job IDs:", excludeJobIds);
-      
-      // If there are jobs to exclude, add them to the query
-      if (excludeJobIds.length > 0) {
-        queryOptions.where.id = {
-          [Op.notIn]: excludeJobIds,
+      if (req.user) {
+        // Find all job IDs the candidate has already applied to
+        const applications = await Applicant.findAll({
+          where: { candidateId: req.user.id },
+          attributes: ["jobId"],
+        });
+        console.log("Applications:", applications);
+
+        // Extract job IDs to exclude
+        excludeJobIds = applications.map((app) => app.jobId);
+        console.log("Exclude job IDs:", excludeJobIds);
+
+        // If there are jobs to exclude, add them to the query
+        if (excludeJobIds.length > 0) {
+          queryOptions.where.id = {
+            [Op.notIn]: excludeJobIds,
+          };
+        }
+      }
+
+      // Parse the sort parameter
+      let [sortField = "postedAt", sortDirection = "desc"] = sort.split(",");
+
+      // First map special sort values to actual database columns
+      if (sortField === "newest") {
+        sortField = "postedAt";
+        sortDirection = "desc";
+      } else if (sortField === "oldest") {
+        sortField = "postedAt";
+        sortDirection = "asc";
+      }
+
+      // Then validate that the sort field exists in the model
+      const validColumns = Object.keys(Job.rawAttributes);
+      if (!validColumns.includes(sortField)) {
+        console.warn(
+          `Invalid sort field: ${sortField}, falling back to postedAt`
+        );
+        sortField = "postedAt"; // Default fallback if column doesn't exist
+      }
+
+      // Ensure sort direction is valid
+      sortDirection = ["ASC", "DESC"].includes(sortDirection.toUpperCase())
+        ? sortDirection.toUpperCase()
+        : "DESC";
+
+      queryOptions.order = [[sortField, sortDirection]];
+
+      // Handle filtering
+      if (req.query.search) {
+        queryOptions.where[Op.or] = [
+          { title: { [Op.iLike]: `%${req.query.search}%` } },
+          { description: { [Op.iLike]: `%${req.query.search}%` } },
+          { OrgName: { [Op.iLike]: `%${req.query.search}%` } },
+        ];
+      }
+
+      if (req.query.location) {
+        queryOptions.where.location = { [Op.iLike]: `%${req.query.location}%` };
+      }
+
+      if (req.query.employmentType) {
+        queryOptions.where.employmentType = req.query.employmentType;
+      }
+
+      if (req.query.jobType) {
+        queryOptions.where.jobType = req.query.jobType;
+      }
+
+      if (req.query.industry) {
+        queryOptions.where.industry = { [Op.iLike]: `%${req.query.industry}%` };
+      }
+
+      if (req.query.jobLevel) {
+        queryOptions.where.jobLevel = req.query.jobLevel;
+      }
+
+      if (req.query.experienceRequired) {
+        queryOptions.where.experienceRequired = {
+          [Op.lte]: parseInt(req.query.experienceRequired),
         };
       }
-    }
 
-    // Parse the sort parameter
-    let [sortField = "postedAt", sortDirection = "desc"] = sort.split(",");
+      // Handle salary range filtering
+      if (req.query.minSalary) {
+        queryOptions.where.salary = {
+          ...(queryOptions.where.salary || {}),
+          [Op.gte]: parseFloat(req.query.minSalary),
+        };
+      }
 
-    // First map special sort values to actual database columns
-    if (sortField === "newest") {
-      sortField = "postedAt";
-      sortDirection = "desc";
-    } else if (sortField === "oldest") {
-      sortField = "postedAt";
-      sortDirection = "asc";
-    }
+      if (req.query.maxSalary) {
+        queryOptions.where.salary = {
+          ...(queryOptions.where.salary || {}),
+          [Op.lte]: parseFloat(req.query.maxSalary),
+        };
+      }
 
-    // Then validate that the sort field exists in the model
-    const validColumns = Object.keys(Job.rawAttributes);
-    if (!validColumns.includes(sortField)) {
-      console.warn(
-        `Invalid sort field: ${sortField}, falling back to postedAt`
-      );
-      sortField = "postedAt"; // Default fallback if column doesn't exist
-    }
+      // Get total count for pagination
+      const count = await Job.count({ where: queryOptions.where });
 
-    // Ensure sort direction is valid
-    sortDirection = ["ASC", "DESC"].includes(sortDirection.toUpperCase())
-      ? sortDirection.toUpperCase()
-      : "DESC";
+      // Execute query with logging to debug SQL issues
+      console.log("Query options:", JSON.stringify(queryOptions));
+      const jobs = await Job.findAll(queryOptions);
 
-    queryOptions.order = [[sortField, sortDirection]];
-
-    // Handle filtering
-    if (req.query.search) {
-      queryOptions.where[Op.or] = [
-        { title: { [Op.iLike]: `%${req.query.search}%` } },
-        { description: { [Op.iLike]: `%${req.query.search}%` } },
-        { OrgName: { [Op.iLike]: `%${req.query.search}%` } },
-      ];
-    }
-
-    if (req.query.location) {
-      queryOptions.where.location = { [Op.iLike]: `%${req.query.location}%` };
-    }
-
-    if (req.query.employmentType) {
-      queryOptions.where.employmentType = req.query.employmentType;
-    }
-
-    if (req.query.jobType) {
-      queryOptions.where.jobType = req.query.jobType;
-    }
-
-    if (req.query.industry) {
-      queryOptions.where.industry = { [Op.iLike]: `%${req.query.industry}%` };
-    }
-
-    if (req.query.jobLevel) {
-      queryOptions.where.jobLevel = req.query.jobLevel;
-    }
-
-    if (req.query.experienceRequired) {
-      queryOptions.where.experienceRequired = {
-        [Op.lte]: parseInt(req.query.experienceRequired),
-      };
-    }
-
-    // Handle salary range filtering
-    if (req.query.minSalary) {
-      queryOptions.where.salary = {
-        ...(queryOptions.where.salary || {}),
-        [Op.gte]: parseFloat(req.query.minSalary),
-      };
-    }
-
-    if (req.query.maxSalary) {
-      queryOptions.where.salary = {
-        ...(queryOptions.where.salary || {}),
-        [Op.lte]: parseFloat(req.query.maxSalary),
-      };
-    }
-
-    // Get total count for pagination
-    const count = await Job.count({ where: queryOptions.where });
-
-    // Execute query with logging to debug SQL issues
-    console.log("Query options:", JSON.stringify(queryOptions));
-    const jobs = await Job.findAll(queryOptions);
-
-    // Return response with pagination metadata
-    res.json({
-      jobs,
-      currentPage: page,
-      totalPages: Math.ceil(count / limit),
-      totalItems: count,
-      excludedJobs: excludeJobIds.length, // Optionally include this for debugging
-    });
-  } catch (error) {
-    console.error("Error fetching jobs:", error.message);
-    // Add more detailed error logging for debugging
-    if (error.parent) {
-      console.error("Database error details:", {
-        message: error.parent.message,
-        sql: error.parent.sql,
-        parameters: error.parent.parameters,
+      // Return response with pagination metadata
+      res.json({
+        jobs,
+        currentPage: page,
+        totalPages: Math.ceil(count / limit),
+        totalItems: count,
+        excludedJobs: excludeJobIds.length, // Optionally include this for debugging
       });
+    } catch (error) {
+      console.error("Error fetching jobs:", error.message);
+      // Add more detailed error logging for debugging
+      if (error.parent) {
+        console.error("Database error details:", {
+          message: error.parent.message,
+          sql: error.parent.sql,
+          parameters: error.parent.parameters,
+        });
+      }
+      res.status(500).json({ error: error.message });
     }
-    res.status(500).json({ error: error.message });
   }
-});
+);
 
 // Get a job by ID (accessible by anyone)
 router.get("/:id", async (req, res) => {
@@ -316,21 +337,23 @@ router.get(
 router.post(
   "/",
   authenticateJWT,
-  authorizeUserType("hrManager"),
+  authorizeUserTypes(["hrManager", "hr"]),
   async (req, res) => {
     try {
       const hro = await HRManager.findByPk(req.user.id);
       const org = await Organization.findByPk(hro.organizationId);
 
       // Add proper validation based on the model
-      const jobData = {
+      let jobData = {
         ...req.body,
         OrgName: org.companyName,
         orgLogo: org.logo,
         subdomain: org.subdomain,
         organizationId: hro.organizationId,
       };
-
+      if (req.user.userType === "hr") {
+        jobData.hrId = req.user.id; // Add HR ID if the user is an HR
+      }
       // Convert text arrays to proper format if needed
       if (jobData.benefits && Array.isArray(jobData.benefits)) {
         jobData.benefits = JSON.stringify(jobData.benefits);
@@ -464,6 +487,7 @@ router.delete(
 router.put(
   "/:id",
   authenticateJWT,
+  authorizeUserTypes(["hrManager", "hr"]),
   (req, res, next) => {
     if (req.user.userType === "hrManager" || req.user.userType === "hr") {
       next();
@@ -513,6 +537,7 @@ router.put(
 router.delete(
   "/:id",
   authenticateJWT,
+  authorizeUserTypes(["hrManager", "hr"]),
   (req, res, next) => {
     if (req.user.userType === "hrManager" || req.user.userType === "hr") {
       next();
