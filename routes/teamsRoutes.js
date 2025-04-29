@@ -28,7 +28,7 @@ router.post(
       const { email, name, department } = req.body;
       const user = req.user.dataValues;
       // Check if HR already exists
-      let hr = await Hr.findOne({ email });
+      let hr = await Hr.findOne({ where: { email } });
       if (hr) {
         return res.status(400).json({ msg: "User already exists" });
       }
