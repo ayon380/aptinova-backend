@@ -13,7 +13,7 @@ HRManager.init(
     },
     type: {
       type: DataTypes.TEXT,
-      defaultValue: "hrm",
+      defaultValue: "hrManager",
     },
     subscriptionId: {
       type: DataTypes.STRING,

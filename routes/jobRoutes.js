@@ -23,7 +23,7 @@ router.get(
     try {
       let jobs = [];
       console.log(req.user);
-      
+
       if (req.user.type === "hr") {
         console.log("HR user detected");
 
@@ -340,8 +340,19 @@ router.post(
   authorizeUserTypes(["hrManager", "hr"]),
   async (req, res) => {
     try {
-      const hro = await HRManager.findByPk(req.user.id);
-      const org = await Organization.findByPk(hro.organizationId);
+      let orgid;
+
+      if (req.user.type === "hrManager") {
+        const hro = await HRManager.findByPk(req.user.id);
+        orgid = hro.organizationId; // Set organizationId from HRManager
+      }
+      if (req.user.type === "hr") {
+        const hr = await HR.findByPk(req.user.id);
+        orgid = hr.organizationId; // Set organizationId from HR
+      }
+      const org = await Organization.findByPk(req.body.organizationId || orgid);
+      console.log("Organization ID:", orgid);
+      console.log("Organization:", org);
 
       // Add proper validation based on the model
       let jobData = {
@@ -349,9 +360,9 @@ router.post(
         OrgName: org.companyName,
         orgLogo: org.logo,
         subdomain: org.subdomain,
-        organizationId: hro.organizationId,
+        organizationId: orgid,
       };
-      if (req.user.userType === "hr") {
+      if (req.user.type === "hr") {
         jobData.hrId = req.user.id; // Add HR ID if the user is an HR
       }
       // Convert text arrays to proper format if needed
