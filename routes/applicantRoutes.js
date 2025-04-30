@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Applicant = require("../models/applicant");
 const HRManager = require("../models/hrManager");
+const HR = require("../models/hr");
 const {
   authenticateJWT,
   authorizeUserType,
@@ -18,17 +19,21 @@ const Organization = require("../models/organization"); // Import Organization m
 router.get(
   "/byjob/:jobId",
   authenticateJWT,
-  authorizeUserTypes(["hrManager", "candidate"]),
+  authorizeUserTypes(["hrManager", "hr"]),
   async (req, res) => {
     console.log("Getting applications for JobID " + req.params.jobId);
 
     try {
-      const hrm = await HRManager.findOne({
-        where: {
-          id: req.user.id,
-        },
-      });
-      const orgid = hrm.organizationId;
+      let orgid = null;
+      if (req.user.type === "hrManager") {
+        const hrm = await HRManager.findByPk(req.user.id);
+        orgid = hrm.organizationId;
+      } else if (req.user.type === "hr") {
+        const hr = await HR.findByPk(req.user.id);
+        orgid = hr.organizationId;
+      } else {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
       const applicants = await Applicant.findAll({
         where: {
           orgId: orgid,
@@ -102,7 +107,7 @@ router.get(
 router.get(
   "/:id/profile",
   authenticateJWT,
-  authorizeUserTypes(["hrManager", "candidate"]),
+  authorizeUserTypes(["hrManager", "hr"]),
   async (req, res) => {
     try {
       const applicant = await Applicant.findByPk(req.params.id, {
@@ -150,16 +155,19 @@ router.post(
 router.put(
   "/:id",
   authenticateJWT,
-  authorizeUserTypes(["hrManager"]),
+  authorizeUserTypes(["hrManager", "hr"]),
   async (req, res) => {
     try {
-      const hrm = await HRManager.findOne({
-        where: {
-          id: req.user.id,
-        },
-      });
-      const orgid = hrm.organizationId;
-
+      let orgid = null;
+      if (req.user.type === "hrManager") {
+        const hrm = await HRManager.findByPk(req.user.id);
+        orgid = hrm.organizationId;
+      } else if (req.user.type === "hr") {
+        const hr = await HR.findByPk(req.user.id);
+        orgid = hr.organizationId;
+      } else {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
       // Get the applicant before update
       const applicant = await Applicant.findOne({
         where: { id: req.params.id, orgId: orgid },
@@ -256,14 +264,17 @@ router.put(
         return res.status(400).json({ error: "Status is required" });
       }
 
-      const hrm = await HRManager.findOne({
-        where: {
-          id: req.user.id,
-        },
-      });
-      const orgid = hrm.organizationId;
+      let orgid = null;
+      if (req.user.type === "hrManager") {
+        const hrm = await HRManager.findByPk(req.user.id);
+        orgid = hrm.organizationId;
+      } else if (req.user.type === "hr") {
+        const hr = await HR.findByPk(req.user.id);
+        orgid = hr.organizationId;
+      } else {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
       console.log("Organization ID: ", orgid); // Debugging line
-      
 
       // Get the applicant before update
       const applicant = await Applicant.findOne({
@@ -275,7 +286,6 @@ router.put(
         ],
       });
       console.log("Applicant found: ", applicant); // Debugging line
-      
 
       if (!applicant) {
         return res.status(404).json({ error: "Applicant not found" });
@@ -285,7 +295,7 @@ router.put(
       if (status === "Offer" && applicant.status !== "Offer") {
         // Fetch organization details including the logo
         console.log("Fetching organization details for logo...");
-        
+
         const organization = await Organization.findByPk(orgid, {
           attributes: ["companyName", "logo"], // Fetch name and logo
         });
@@ -341,7 +351,7 @@ router.put(
 router.delete(
   "/:id",
   authenticateJWT,
-  authorizeUserTypes(["hrManager", "candidate"]),
+  authorizeUserTypes(["hrManager", "hr"]),
   async (req, res) => {
     try {
       const deleted = await Applicant.destroy({

@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const HiringTest = require("../models/hiringTest");
+const HR = require("../models/hr");
 const Applicant = require("../models/applicant"); // Add this line
 const {
   authenticateJWT,
@@ -14,7 +15,7 @@ const sequelize = require("../config/database");
 router.get(
   "/ready-made",
   authenticateJWT,
-  authorizeUserTypes(["hrManager", "candidate"]),
+  authorizeUserTypes(["hrManager", "hr"]),
   async (req, res) => {
     try {
       // Return simplified test information (id, name, description, question count)
@@ -36,7 +37,7 @@ router.get(
 router.get(
   "/",
   authenticateJWT,
-  authorizeUserTypes(["hrManager", "candidate"]),
+  authorizeUserTypes(["hrManager", "hr"]),
   async (req, res) => {
     console.log("Getting all hiring tests");
 
@@ -360,15 +361,19 @@ router.post(
 router.post(
   "/",
   authenticateJWT,
-  authorizeUserTypes(["hrManager", "candidate"]),
+  authorizeUserTypes(["hrManager", "hr"]),
   async (req, res) => {
     console.log("Creating hiring test");
-    const hrm = await HRManager.findOne({
-      where: {
-        id: req.user.id,
-      },
-    });
-    const orgid = hrm.organizationId;
+    let orgid = null;
+    if (req.user.type === "hrManager") {
+      const hrm = await HRManager.findByPk(req.user.id);
+      orgid = hrm.organizationId;
+    } else if (req.user.type === "hr") {
+      const hr = await HR.findByPk(req.user.id);
+      orgid = hr.organizationId;
+    } else {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
     try {
       // Check if request contains an id for a ready-made test
       if (
@@ -439,7 +444,7 @@ router.post(
 router.put(
   "/:id",
   authenticateJWT,
-  authorizeUserTypes(["hrManager", "candidate"]),
+  authorizeUserTypes(["hrManager", "hr"]),
   async (req, res) => {
     try {
       const [updated] = await HiringTest.update(req.body, {
@@ -464,7 +469,7 @@ router.put(
 router.delete(
   "/:id",
   authenticateJWT,
-  authorizeUserTypes(["hrManager", "candidate"]),
+  authorizeUserTypes(["hrManager", "hr"]),
   async (req, res) => {
     try {
       const deleted = await HiringTest.destroy({

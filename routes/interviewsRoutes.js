@@ -30,7 +30,7 @@ const calendar = google.calendar({ version: "v3", auth: oauth2Client });
 router.post(
   "/schedule",
   authenticateJWT,
-  authorizeUserTypes(["hrManager", "candidate"]),
+  authorizeUserTypes(["hrManager", "hr"]),
   async (req, res) => {
     try {
       console.log("Starting interview scheduling process");

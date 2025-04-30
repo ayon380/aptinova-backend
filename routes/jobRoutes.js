@@ -22,7 +22,7 @@ router.get(
   async (req, res) => {
     try {
       let jobs = [];
-      console.log(req.user);
+      // console.log(req.user);
 
       if (req.user.type === "hr") {
         console.log("HR user detected");
