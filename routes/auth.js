@@ -69,7 +69,7 @@ const setRefreshTokenCookie = (res, refreshToken) => {
 // Add these helper functions at the top after the imports
 const getCompanySubdomain = async (user) => {
   console.log("Runnging getCompanySubdomain");
-  // console.log(user);
+  console.log(user);
 
   const HrManager = await HRManager.findByPk(user.id);
   // console.log("HrM" + HrManager);
@@ -84,8 +84,8 @@ const getCompanySubdomain = async (user) => {
 };
 
 const getCompanySubdomainHR = async (user) => {
-  console.log("Runnging getCompanySubdomain");
-  // console.log(user);
+  console.log("Runnging getCompanySubdomainHR");
+  console.log(user);
 
   const Hr = await HR.findByPk(user.id);
   // console.log("HrM" + HrManager);
@@ -1071,59 +1071,65 @@ const InvalidToken = require("../models/invalidToken");
 // Update refresh token endpoint to check for invalidated tokens
 router.post("/refresh-token", async (req, res) => {
   const refreshToken = req.cookies.refreshToken;
+  try {
+    if (!refreshToken) {
+      return res.status(400).json({ error: "Refresh token is required" });
+    }
 
-  if (!refreshToken) {
-    return res.status(400).json({ error: "Refresh token is required" });
-  }
-
-  // Check if token has been invalidated
-  const invalidated = await InvalidToken.findOne({
-    where: { token: refreshToken },
-  });
-
-  if (invalidated) {
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
+    // Check if token has been invalidated
+    const invalidated = await InvalidToken.findOne({
+      where: { token: refreshToken },
     });
-    return res.status(401).json({ error: "Token has been invalidated" });
-  }
 
-  // Verify the refresh token
-  const { verifyRefreshToken } = require("../middleware/auth");
-  const userData = verifyRefreshToken(refreshToken);
+    if (invalidated) {
+      res.clearCookie("refreshToken", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
+      });
+      return res.status(401).json({ error: "Token has been invalidated" });
+    }
 
-  if (!userData) {
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
+    // Verify the refresh token
+    const { verifyRefreshToken } = require("../middleware/auth");
+    const userData = verifyRefreshToken(refreshToken);
+
+    if (!userData) {
+      res.clearCookie("refreshToken", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
+      });
+      return res
+        .status(401)
+        .json({ error: "Invalid or expired refresh token" });
+    }
+
+    // Generate new tokens
+    const tokens = generateToken({ id: userData.id, type: userData.type });
+
+    // Set new refresh token cookie
+    setRefreshTokenCookie(res, tokens.refreshToken);
+
+    // Invalidate the old refresh token
+    await InvalidToken.create({
+      token: refreshToken,
+      expiresAt: new Date(Date.now() + 100 * 24 * 60 * 60 * 1000), // Match refresh token expiry
     });
-    return res.status(401).json({ error: "Invalid or expired refresh token" });
+
+    // Clean up expired invalid tokens
+    await InvalidToken.cleanup();
+
+    res.json({
+      accessToken: tokens.accessToken,
+      userType: userData.type,
+    });
+  } catch (error) {
+    console.error("Refresh token error:", error);
+    res.status(500).json({ error: "Failed to refresh token" });
   }
-
-  // Generate new tokens
-  const tokens = generateToken({ id: userData.id, type: userData.type });
-
-  // Set new refresh token cookie
-  setRefreshTokenCookie(res, tokens.refreshToken);
-
-  // Invalidate the old refresh token
-  await InvalidToken.create({
-    token: refreshToken,
-    expiresAt: new Date(Date.now() + 100 * 24 * 60 * 60 * 1000), // Match refresh token expiry
-  });
-
-  // Clean up expired invalid tokens
-  await InvalidToken.cleanup();
-
-  res.json({
-    accessToken: tokens.accessToken,
-    userType: userData.type,
-  });
 });
 
 // Update logout endpoint to invalidate the refresh token

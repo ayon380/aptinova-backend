@@ -342,7 +342,7 @@ router.post(
     try {
       let orgid;
 
-      if (req.user.type === "hrManager") {
+      if (req.user.type === "hrm") {
         const hro = await HRManager.findByPk(req.user.id);
         orgid = hro.organizationId; // Set organizationId from HRManager
       }

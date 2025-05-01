@@ -365,7 +365,7 @@ router.post(
   async (req, res) => {
     console.log("Creating hiring test");
     let orgid = null;
-    if (req.user.type === "hrManager") {
+    if (req.user.type === "hrm") {
       const hrm = await HRManager.findByPk(req.user.id);
       orgid = hrm.organizationId;
     } else if (req.user.type === "hr") {

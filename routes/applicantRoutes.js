@@ -25,7 +25,11 @@ router.get(
 
     try {
       let orgid = null;
-      if (req.user.type === "hrManager") {
+      console.log("User Type: ", req.user.type); // Debugging line
+
+      if (req.user.type === "hrm") {
+        console.log("User is HRManager");
+
         const hrm = await HRManager.findByPk(req.user.id);
         orgid = hrm.organizationId;
       } else if (req.user.type === "hr") {
@@ -159,7 +163,7 @@ router.put(
   async (req, res) => {
     try {
       let orgid = null;
-      if (req.user.type === "hrManager") {
+      if (req.user.type === "hrm") {
         const hrm = await HRManager.findByPk(req.user.id);
         orgid = hrm.organizationId;
       } else if (req.user.type === "hr") {
@@ -265,7 +269,7 @@ router.put(
       }
 
       let orgid = null;
-      if (req.user.type === "hrManager") {
+      if (req.user.type === "hrm") {
         const hrm = await HRManager.findByPk(req.user.id);
         orgid = hrm.organizationId;
       } else if (req.user.type === "hr") {
