@@ -84,13 +84,13 @@ Set these in `.env` (or deployment environment). Required status depends on enab
 | Variable | Required | Purpose |
 |---|---:|---|
 | `NODE_ENV` | No | Enables production cookie/SSL behavior when `production`. |
-| `DATABASE_URL` | Yes* | PostgreSQL connection string. If missing, local fallback is used. |
+| `DATABASE_URL` | No* | PostgreSQL connection string. If missing, local fallback is used. |
 | `SESSION_SECRET` | Yes | Session signing secret. |
 | `JWT_SECRET` | Yes | JWT access token signing/verifying secret. |
 | `REFRESH_TOKEN_SECRET` | Yes | JWT refresh token signing/verifying secret. |
 | `FRONTEND_URL` | Yes | Frontend redirect/callback base URL. |
 
-\*Strongly recommended to define explicitly.
+\*Strongly recommended to define explicitly (and typically required in production environments).
 
 ### OAuth & calendar
 
