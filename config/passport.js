@@ -49,7 +49,7 @@ const GOOGLE_SCOPES = [
 
 const redirect =
   process.env.NODE_ENV === "production"
-    ? "https://api.aptinova.tech/auth/google/callback"
+    ? "https://apiaptinovallc.vercel.app/auth/google/callback"
     : "http://localhost:3000/auth/google/callback";
 passport.use(
   new GoogleStrategy(
