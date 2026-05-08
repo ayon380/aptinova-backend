@@ -108,7 +108,12 @@ const constructRedirectUrl = async (
 ) => {
   const url = new URL(baseUrl);
   if (userType != "candidate") {
-    const subdomain = await getCompanySubdomain(user);
+    let subdomain = "";
+    if (userType === "hrManager") {
+      subdomain = await getCompanySubdomain(user);
+    } else if (userType === "hr") {
+      subdomain = await getCompanySubdomainHR(user);
+    }
     console.log(subdomain);
     if (subdomain) {
       url.hostname = `${subdomain}.${url.hostname}`;
