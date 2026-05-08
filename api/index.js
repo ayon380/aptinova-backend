@@ -15,7 +15,7 @@ const app = express();
 app.use(cookieParser());
 app.use(
   cors({
-    origin: ["https://aptinovallc.vercel.app/", "http://localhost:4000"],
+    origin: ["https://aptinovallc.vercel.app", "https://aptinovallc.vercel.app/", "http://localhost:4000"],
     credentials: true,
   })
 );
