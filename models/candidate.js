@@ -48,10 +48,10 @@ const Candidate = sequelize.define(
       type: DataTypes.STRING,
     },
     googleAccessToken: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
     },
     googleRefreshToken: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
     },
     resetToken: {
       type: DataTypes.STRING,

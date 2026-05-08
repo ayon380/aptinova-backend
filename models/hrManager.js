@@ -77,10 +77,10 @@ HRManager.init(
       allowNull: true,
     },
     googleAccessToken: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
     },
     googleRefreshToken: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
     },
     organizationId: {
       type: DataTypes.UUID,

@@ -37,10 +37,10 @@ const HR = sequelize.define("HR", {
     defaultValue: "dormant",
   },
   googleAccessToken: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
   },
   googleRefreshToken: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
   },
   profilePicture: {
     type: DataTypes.STRING,
